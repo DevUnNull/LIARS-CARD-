@@ -1,0 +1,37 @@
+# --- ASP.NET Core / .NET .gitignore ---
+
+# Build output directories
+bin/
+obj/
+out/
+publish/
+[Bb]uild/
+[Bb]uilds/
+
+# Visual Studio & VS Code temporary & user-specific files
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.userprefs
+*.pidb
+
+# Rider / ReSharper
+*_Resharper.*/
+*.DotSettings.user
+
+# Local configuration & secret settings files (keep appsettings.json for default configs)
+appsettings.Secrets.json
+appsettings.Local.json
+*.Development.json
+
+# Test results & coverage
+[Tt]est[Rr]esults/
+*.coverage
+*.coveragexml
+
+# Log files
+*.log
