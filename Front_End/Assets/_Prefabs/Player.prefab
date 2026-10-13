@@ -152,6 +152,7 @@ GameObject:
   - component: {fileID: 8553553433892182188}
   - component: {fileID: 4829974954862569204}
   - component: {fileID: 5071536190140921107}
+  - component: {fileID: 6228503629045675848}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -308,3 +309,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FirstPersonLook
   sensitivity: 2
   smoothing: 1.5
+  playerCamera: {fileID: 0}
+--- !u!114 &6228503629045675848
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1380949765185175948}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5ebbdf58c2e2504f8ada9b36f9b1791, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerController
+  firstPersonLook: {fileID: 0}
+  firstPersonMovement: {fileID: 0}

@@ -146,12 +146,26 @@ namespace Back_End.Controllers
             bool updated = playerService.UpdatePosition(
                 peer.Id, x, y, z, yaw);
 
-            //if (updated)
-            //{
-            //    logger.LogInformation(
-            //        "Player {Id}: Position ({X}, {Y}, {Z}), Yaw {Yaw}",
-            //        peer.Id, x, y, z, yaw);
-            //}
+            if (!updated)
+            {
+                return;
+            }
+
+            var writer = new NetDataWriter();
+            writer.Put((byte)5);
+            writer.Put(peer.Id);
+            writer.Put(x);
+            writer.Put(y);
+            writer.Put(z);
+            writer.Put(yaw);
+
+            foreach (var receiver in connections.Values)
+            {
+                if (receiver.Id == peer.Id)
+                    continue;
+
+                receiver.Send(writer, DeliveryMethod.Sequenced);
+            }
         }
 
         private static void SendPlayerMessage(NetPeer receiver, byte type, int playerId)
