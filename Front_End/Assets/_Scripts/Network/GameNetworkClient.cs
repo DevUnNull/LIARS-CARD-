@@ -24,7 +24,13 @@ public class GameNetworkClient : MonoBehaviour
         listener.PeerDisconnectedEvent += (peer, info) =>
         {
             serverPeer = null;
+            PlayerManager.Instance.ClearPlayers();
             Debug.Log($"Fail: {info.Reason}");
+        };
+
+        listener.NetworkReceiveEvent += (peer, reader, channel, method) =>
+        {
+            HandleReceived(reader);
         };
 
         if (!client.Start())
@@ -77,5 +83,68 @@ public class GameNetworkClient : MonoBehaviour
         writer.Put(yaw);
 
         serverPeer.Send(writer, DeliveryMethod.Sequenced);
+    }
+
+    private void HandleReceived(NetPacketReader reader)
+    {
+        try
+        {
+            if (reader.AvailableBytes < 1)
+                return;
+
+            byte messageType = reader.GetByte();
+
+            switch (messageType)
+            {
+                case 2:
+                    {
+                        if (reader.AvailableBytes != 4)
+                            return;
+
+                        int playerId = reader.GetInt();
+                        PlayerManager.Instance.SetMyPlayerId(playerId);
+                        break;
+                    }
+
+                case 3:
+                    {
+                        if (reader.AvailableBytes != 4)
+                            return;
+
+                        int playerId = reader.GetInt();
+                        PlayerManager.Instance.AddRemotePlayer(playerId);
+                        break;
+                    }
+
+                case 4:
+                    {
+                        if (reader.AvailableBytes != 4)
+                            return;
+
+                        int playerId = reader.GetInt();
+                        PlayerManager.Instance.RemoveRemotePlayer(playerId);
+                        break;
+                    }
+                case 5:
+                    {
+                        if (reader.AvailableBytes != 20)
+                            return;
+
+                        int playerId = reader.GetInt();
+
+                        float x = reader.GetFloat();
+                        float y = reader.GetFloat();
+                        float z = reader.GetFloat();
+                        float yaw = reader.GetFloat();
+
+                        PlayerManager.Instance.UpdateRemotePosition(playerId, new Vector3(x, y, z),yaw);
+                        break;
+                    }
+            }
+        }
+        finally
+        {
+            reader.Recycle();
+        }
     }
 }

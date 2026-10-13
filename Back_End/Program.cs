@@ -1,4 +1,5 @@
-using Back_End;
+using Back_End.Controllers;
+using Back_End.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,7 +9,8 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddHostedService<GameNetworkService>();
+builder.Services.AddSingleton<PlayerService>();
+builder.Services.AddHostedService<GameNetworkController>();
 
 var app = builder.Build();
 
