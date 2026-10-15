@@ -2,6 +2,7 @@
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Back_End.Services
@@ -62,6 +63,22 @@ namespace Back_End.Services
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        public string GenerateRefreshToken()
+        {
+            byte[] randomBytes = RandomNumberGenerator.GetBytes(64);
+
+            return Convert.ToBase64String(randomBytes);
+        }
+
+        public string HashRefreshToken(string refreshToken)
+        {
+            byte[] tokenBytes = Encoding.UTF8.GetBytes(refreshToken);
+
+            byte[] hashBytes = SHA256.HashData(tokenBytes);
+
+            return Convert.ToHexString(hashBytes);
         }
     }
 }

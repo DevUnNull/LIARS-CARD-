@@ -1,5 +1,7 @@
 ﻿using Back_End.DTOs;
+using Back_End.Models;
 using Back_End.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Back_End.Controllers
@@ -52,10 +54,41 @@ namespace Back_End.Controllers
 
             var accessToken = tokenService.GenerateAccessToken(user);
 
+            var refreshToken = await authService.CreateRefreshTokenAsync(user);
+
             return Ok(new
             {
                 message = "Đăng nhập thành công",
                 accessToken = accessToken,
+                refreshToken = refreshToken,
+                tokenType = "Bearer",
+                expiresIn = 3600
+            });
+        }
+
+
+        [HttpPost("refresh")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Refresh(
+            [FromBody] RefreshTokenRequest request)
+        {
+            var result = await authService.RefreshAsync(
+                request.RefreshToken
+            );
+
+            if (result == null)
+            {
+                return Unauthorized(new
+                {
+                    message = "Refresh Token không hợp lệ hoặc đã hết hạn"
+                });
+            }
+
+            return Ok(new
+            {
+                message = "Làm mới token thành công",
+                accessToken = result.Value.AccessToken,
+                refreshToken = result.Value.RefreshToken,
                 tokenType = "Bearer",
                 expiresIn = 3600
             });
