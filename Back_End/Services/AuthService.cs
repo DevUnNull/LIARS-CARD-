@@ -1,166 +1,177 @@
-﻿using Back_End.DTOs;
+﻿
+using Back_End.DTOs;
 using Back_End.Models;
-using Back_End.Models.Back_End.Models;
 using Microsoft.AspNetCore.Identity;
 using MongoDB.Driver;
 
-namespace Back_End.Services
+namespace Back_End.Services;
+
+public class AuthService
 {
-    public class AuthService
+    private readonly IMongoCollection<User> _users;
+    private readonly IMongoCollection<RefreshToken> _refreshTokens;
+    private readonly PasswordHasher<User> _passwordHasher = new();
+    private readonly TokenService _tokenService;
+    private readonly IConfiguration _configuration;
+    private readonly IMongoCollection<RevokedAccessToken> _revokedAccessTokens;
+    public AuthService(
+        IMongoDatabase database,
+        TokenService tokenService,
+        IConfiguration configuration,
+        IMongoCollection<RevokedAccessToken> revokedAccessTokens)
     {
-        private readonly IMongoCollection<User> users;
-        private readonly PasswordHasher<User> passwordHasher;
-        private readonly IMongoCollection<RefreshToken> refreshTokens;
-        private readonly TokenService tokenService;
+        _users = database.GetCollection<User>("Users");
+        _refreshTokens = database.GetCollection<RefreshToken>("refresh_tokens");
+        _tokenService = tokenService;
+        _configuration = configuration;
+        _revokedAccessTokens = revokedAccessTokens;
+    }
 
-        public AuthService(IMongoDatabase database, TokenService tokenService)
+    public async Task<bool> RegisterAsync(RegisterRequest request)
+    {
+        string email = request.Email.Trim().ToLowerInvariant();
+
+        var existingUser = await _users
+            .Find(u => u.Email == email)
+            .FirstOrDefaultAsync();
+
+        if (existingUser != null)
+            return false;
+
+        var user = new User
         {
-            users = database.GetCollection<User>("Users");
-            refreshTokens = database.GetCollection<RefreshToken>("refresh_tokens");
-            passwordHasher = new PasswordHasher<User>();
-            this.tokenService = tokenService;
-        }
+            Id = MongoDB.Bson.ObjectId.GenerateNewId().ToString(),
+            Email = email,
+            DisplayName = request.DisplayName.Trim(),
+            CreatedAt = DateTime.UtcNow
+        };
 
-        public async Task<bool> RegisterAsync(RegisterRequest request)
+        user.PasswordHash = _passwordHasher.HashPassword(
+            user, request.Password);
+
+        try
         {
-            string email = request.Email.Trim().ToLowerInvariant();
-
-            var existingUser = await users
-                .Find(u => u.Email == email)
-                .FirstOrDefaultAsync();
-
-            if (existingUser != null)
-            {
-                return false;
-            }
-
-            var user = new User
-            {
-                Email = email,
-                DisplayName = request.DisplayName.Trim(),
-                CreatedAt = DateTime.UtcNow
-            };
-
-            user.PasswordHash = passwordHasher.HashPassword(
-                user,
-                request.Password
-            );
-
-            await users.InsertOneAsync(user);
-
+            await _users.InsertOneAsync(user);
             return true;
         }
-
-        public async Task<User?> LoginAsync(LoginRequest request)
+        catch (MongoWriteException ex)
+            when (ex.WriteError?.Category ==
+                  ServerErrorCategory.DuplicateKey)
         {
-            string email = request.Email.Trim().ToLowerInvariant();
-
-            var user = await users.Find(u => u.Email == email).FirstOrDefaultAsync();
-
-            if (user == null)
-            {
-                return null;
-            }
-
-            var result = passwordHasher.VerifyHashedPassword(
-                user,
-                user.PasswordHash,
-                request.Password
-            );
-
-            if (result == PasswordVerificationResult.Failed)
-            {
-                return null;
-            }
-
-            return user;
+            return false;
         }
-
-        public async Task<string> CreateRefreshTokenAsync(User user)
-        {
-            string refreshToken = tokenService.GenerateRefreshToken();
-
-            string tokenHash = tokenService.HashRefreshToken(refreshToken);
-
-            var tokenDocument = new RefreshToken
-            {
-                UserId = user.Id!,
-                TokenHash = tokenHash,
-                CreatedAt = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.AddDays(7),
-                RevokedAt = null
-            };
-
-            await refreshTokens.InsertOneAsync(tokenDocument);
-
-            return refreshToken;
-        }
-
-
-        public async Task<(string AccessToken, string RefreshToken)?>
-            RefreshAsync(string oldRefreshToken)
-        {
-            if (string.IsNullOrWhiteSpace(oldRefreshToken))
-                return null;
-
-            string tokenHash =
-                tokenService.HashRefreshToken(oldRefreshToken);
-
-            var now = DateTime.UtcNow;
-
-            string newRefreshToken =
-                tokenService.GenerateRefreshToken();
-
-            string newTokenHash =
-                tokenService.HashRefreshToken(newRefreshToken);
-
-            var filter = Builders<RefreshToken>.Filter.And(
-                Builders<RefreshToken>.Filter.Eq(
-                    t => t.TokenHash, tokenHash),
-                Builders<RefreshToken>.Filter.Eq(
-                    t => t.RevokedAt, null),
-                Builders<RefreshToken>.Filter.Gt(
-                    t => t.ExpiresAt, now)
-            );
-
-            var update = Builders<RefreshToken>.Update
-                .Set(t => t.RevokedAt, now);
-
-            var oldToken = await refreshTokens
-                .FindOneAndUpdateAsync(
-                    filter,
-                    update,
-                    new FindOneAndUpdateOptions<RefreshToken>
-                    {
-                        ReturnDocument = ReturnDocument.Before
-                    });
-
-            if (oldToken == null)
-                return null;
-
-            var user = await users
-                .Find(u => u.Id == oldToken.UserId)
-                .FirstOrDefaultAsync();
-
-            if (user == null)
-                return null;
-
-            var newTokenDocument = new RefreshToken
-            {
-                UserId = user.Id!,
-                TokenHash = newTokenHash,
-                CreatedAt = now,
-                ExpiresAt = now.AddDays(7),
-                RevokedAt = null
-            };
-
-            await refreshTokens.InsertOneAsync(newTokenDocument);
-
-            string newAccessToken =
-                tokenService.GenerateAccessToken(user);
-
-            return (newAccessToken, newRefreshToken);
-        }
-
     }
+
+    public async Task<User?> LoginAsync(LoginRequest request)
+    {
+        string email = request.Email.Trim().ToLowerInvariant();
+
+        var user = await _users
+            .Find(u => u.Email == email)
+            .FirstOrDefaultAsync();
+
+        if (user == null)
+            return null;
+
+        var result = _passwordHasher.VerifyHashedPassword(
+            user, user.PasswordHash, request.Password);
+
+        if (result == PasswordVerificationResult.Failed)
+            return null;
+
+        if (result == PasswordVerificationResult.SuccessRehashNeeded)
+        {
+            user.PasswordHash = _passwordHasher.HashPassword(
+                user, request.Password);
+
+            await _users.ReplaceOneAsync(u => u.Id == user.Id, user);
+        }
+
+        return user;
+    }
+
+    public async Task<string> CreateRefreshTokenAsync(User user)
+    {
+        string refreshToken = _tokenService.GenerateRefreshToken();
+
+        var tokenDocument = new RefreshToken
+        {
+            UserId = user.Id!,
+            TokenHash = _tokenService.HashRefreshToken(refreshToken),
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddDays(
+                _configuration.GetValue<int>("Jwt:RefreshTokenDays", 30)),
+            RevokedAt = null
+        };
+
+        await _refreshTokens.InsertOneAsync(tokenDocument);
+        return refreshToken;
+    }
+
+    public async Task<string?> RefreshAsync(string oldRefreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(oldRefreshToken))
+            return null;
+
+        string tokenHash = _tokenService.HashRefreshToken(oldRefreshToken);
+        DateTime now = DateTime.UtcNow;
+
+        var session = await _refreshTokens.Find(t =>
+            t.TokenHash == tokenHash &&
+            t.RevokedAt == null &&
+            t.ExpiresAt > now
+        ).FirstOrDefaultAsync();
+
+        if (session == null)
+            return null;
+
+        var user = await _users
+            .Find(u => u.Id == session.UserId)
+            .FirstOrDefaultAsync();
+
+        if (user == null)
+            return null;
+
+        // Do not replace or extend the existing refresh token.
+        return _tokenService.GenerateAccessToken(user);
+    }
+
+    public async Task<bool> LogoutAsync(string refreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            return false;
+
+        string tokenHash = _tokenService.HashRefreshToken(refreshToken);
+
+        var filter = Builders<RefreshToken>.Filter.And(
+            Builders<RefreshToken>.Filter.Eq(
+                t => t.TokenHash, tokenHash),
+            Builders<RefreshToken>.Filter.Eq(
+                t => t.RevokedAt, null));
+
+        var update = Builders<RefreshToken>.Update
+            .Set(t => t.RevokedAt, DateTime.UtcNow);
+
+        var result = await _refreshTokens.UpdateOneAsync(filter, update);
+
+        return result.ModifiedCount == 1;
+    }
+
+    public async Task RevokeAccessTokenAsync(
+        string jti,
+        DateTime expiresAt)
+    {
+        var filter = Builders<RevokedAccessToken>.Filter
+            .Eq(t => t.Jti, jti);
+
+        var update = Builders<RevokedAccessToken>.Update
+            .SetOnInsert(t => t.Jti, jti)
+            .SetOnInsert(t => t.ExpiresAt, expiresAt);
+
+        await _revokedAccessTokens.UpdateOneAsync(
+            filter,
+            update,
+            new UpdateOptions { IsUpsert = true });
+    }
+
 }
