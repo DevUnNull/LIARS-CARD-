@@ -1,4 +1,4 @@
-﻿using Back_End.Models.Back_End.Models;
+﻿using Back_End.Models;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -19,29 +19,29 @@ namespace Back_End.Services
         public string GenerateAccessToken(User user)
         {
             var secretKey = _configuration["Jwt:Key"]
-                ?? throw new Exception("JWT Key chưa được cấu hình");
+                ?? throw new InvalidOperationException("JWT Key chưa được cấu hình");
 
             var issuer = _configuration["Jwt:Issuer"]
-                ?? throw new Exception("JWT Issuer chưa được cấu hình");
+                ?? throw new InvalidOperationException("JWT Issuer chưa được cấu hình");
 
             var audience = _configuration["Jwt:Audience"]
-                ?? throw new Exception("JWT Audience chưa được cấu hình");
+                ?? throw new InvalidOperationException("JWT Audience chưa được cấu hình");
 
-            var expiryMinutes = int.Parse(
-                _configuration["Jwt:ExpiryMinutes"] ?? "60"
-            );
+            var expiryMinutes = _configuration.GetValue<int>(
+            "Jwt:ExpiryMinutes", 30);
+
 
             var claims = new List<Claim>
             {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id!),
+                new Claim(JwtRegisteredClaimNames.Sub, 
+                user.Id ?? throw new InvalidOperationException("User ID missing")),
 
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
 
                 new Claim("displayName", user.DisplayName),
 
                 new Claim(
-                    JwtRegisteredClaimNames.Jti,
-                    Guid.NewGuid().ToString()
+                    JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()
                 )
             };
 
@@ -50,14 +50,14 @@ namespace Back_End.Services
             );
 
             var credentials = new SigningCredentials(
-                key,
-                SecurityAlgorithms.HmacSha256
+                key, SecurityAlgorithms.HmacSha256
             );
 
             var token = new JwtSecurityToken(
                 issuer: issuer,
                 audience: audience,
                 claims: claims,
+                notBefore: DateTime.UtcNow,
                 expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
                 signingCredentials: credentials
             );
@@ -67,18 +67,13 @@ namespace Back_End.Services
 
         public string GenerateRefreshToken()
         {
-            byte[] randomBytes = RandomNumberGenerator.GetBytes(64);
-
-            return Convert.ToBase64String(randomBytes);
+            return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
         }
 
         public string HashRefreshToken(string refreshToken)
         {
-            byte[] tokenBytes = Encoding.UTF8.GetBytes(refreshToken);
-
-            byte[] hashBytes = SHA256.HashData(tokenBytes);
-
-            return Convert.ToHexString(hashBytes);
+            return Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken)));
         }
     }
 }
