@@ -68,7 +68,7 @@ builder.Services.AddSingleton<IMongoCollection<RevokedAccessToken>>(sp =>
 });
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TokenService>();
-builder.Services.AddSingleton<LobbyStore>();
+builder.Services.AddSingleton<TableService>();
 
 
 var jwtKey = builder.Configuration["Jwt:Key"]
