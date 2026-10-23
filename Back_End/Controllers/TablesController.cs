@@ -43,7 +43,7 @@ namespace Back_End.Controllers
         [HttpPost("{tableId:int}/sit")]
         public IActionResult SitDown([FromRoute] int tableId, [FromBody] SitDownRequest request)
         {
-            string? playerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            string? playerId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
 
             if (string.IsNullOrWhiteSpace(playerId))
             {
