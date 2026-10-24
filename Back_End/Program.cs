@@ -1,5 +1,8 @@
-﻿using Back_End.Data;
+using Back_End.Data;
+using Back_End.Filters;
+using Back_End.Infrastructure.MatchState;
 using Back_End.Models;
+using Back_End.Rules;
 using Back_End.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
@@ -12,7 +15,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<GameExceptionFilter>();
+});
 builder.Services.AddEndpointsApiExplorer();
 
 
@@ -23,6 +29,13 @@ builder.Services.AddSwaggerGen(options =>
         Title = "LiarCard API",
         Version = "v1"
     });
+
+    var xmlFilename = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
+    if (File.Exists(xmlPath))
+    {
+        options.IncludeXmlComments(xmlPath);
+    }
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -69,6 +82,17 @@ builder.Services.AddSingleton<IMongoCollection<RevokedAccessToken>>(sp =>
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddSingleton<TableService>();
+
+// Liars Card Gameplay Engine & Services
+builder.Services.AddSingleton<IMatchStore, InMemoryMatchStore>();
+builder.Services.AddSingleton<DeckRuleEngine>();
+builder.Services.AddSingleton<TurnStateMachine>();
+builder.Services.AddScoped<DeckRoundService>();
+builder.Services.AddScoped<PenaltyService>();
+builder.Services.AddScoped<DeckActionService>();
+builder.Services.AddScoped<ChallengeService>();
+builder.Services.AddScoped<MatchService>();
+builder.Services.AddScoped<MatchQueryService>();
 
 
 var jwtKey = builder.Configuration["Jwt:Key"]
