@@ -183,6 +183,18 @@ await users.Indexes.CreateOneAsync(
         Builders<User>.IndexKeys.Ascending(u => u.Email),
         new CreateIndexOptions { Unique = true }));
 
+
+var characterSelections =
+    database.GetCollection<CharacterSelection>(
+        "CharacterSelections");
+
+await characterSelections.Indexes.CreateOneAsync(
+    new CreateIndexModel<CharacterSelection>(
+        Builders<CharacterSelection>.IndexKeys
+            .Ascending(s => s.UserId),
+        new CreateIndexOptions { Unique = true }));
+
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {

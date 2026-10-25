@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.SceneManagement;
 
 public class AuthFormController : MonoBehaviour
 {
@@ -105,7 +104,7 @@ public class AuthFormController : MonoBehaviour
                 loginButton.interactable = true;
                 isBusy = false;
 
-                SceneManager.LoadScene("SampleScene");
+                //SceneManager.LoadScene("SampleScene");
                 yield break;
             }
         }

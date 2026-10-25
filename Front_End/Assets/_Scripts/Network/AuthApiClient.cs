@@ -8,11 +8,24 @@ using UnityEngine.Networking;
 public class AuthApiClient : MonoBehaviour
 {
     [SerializeField]
-    private string baseUrl = "http://localhost:5000";
+    private string baseUrl = "http://localhost:5280";
 
     public string AccessToken { get; private set; }
     public string RefreshToken { get; private set; }
 
+    public static AuthApiClient Instance { get; private set; }
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+    }
 
     public void TestMeButton()
     {
