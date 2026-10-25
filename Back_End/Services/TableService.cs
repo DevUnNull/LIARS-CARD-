@@ -1,4 +1,4 @@
-﻿using Back_End.DTOs;
+using Back_End.DTOs;
 using Back_End.Models;
 using Microsoft.CodeAnalysis.Elfie.Serialization;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -72,7 +72,7 @@ namespace Back_End.Services
             }
         }
 
-        public TableResponse GetTableByID(int id)
+        public TableResponse? GetTableByID(int id)
         {
             lock (tableLock)
             {
