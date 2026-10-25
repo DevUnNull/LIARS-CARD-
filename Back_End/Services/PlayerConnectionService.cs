@@ -77,6 +77,14 @@ namespace Back_End.Services
             }
         }
 
+        public KeyValuePair<string, NetPeer>[] GetAll()
+        {
+            lock (lockObj)
+            {
+                return players.ToArray();
+            }
+        }
+
         public void Clear()
         {
             lock (lockObj)

@@ -57,6 +57,70 @@ public class NetworkManager : Singleton<NetworkManager>
 
             Debug.LogWarning(connectionError);
         };
+
+        listener.NetworkReceiveEvent += (peer, reader, channel, deliveryMethod) =>
+        {
+            try
+            {
+                if (reader.AvailableBytes < 1)
+                    return;
+
+                byte packetType = reader.GetByte();
+
+                switch (packetType)
+                {
+                    case 2:
+                        {
+                            string playerId = reader.GetString(128);
+
+                            if (reader.AvailableBytes != 16)
+                                return;
+
+                            float x = reader.GetFloat();
+                            float y = reader.GetFloat();
+                            float z = reader.GetFloat();
+                            float rotationY = reader.GetFloat();
+
+                            var manager = RemotePlayerManager.Instance;
+
+                            if (manager == null)
+                                return;
+
+                            manager.UpdateRemotePlayer(
+                                playerId,
+                                new Vector3(x, y, z),
+                                rotationY);
+
+                            break;
+                        }
+
+                    case 3:
+                        {
+                            string playerId = reader.GetString(128);
+
+                            if (reader.AvailableBytes != 0)
+                                return;
+
+                            var manager = RemotePlayerManager.Instance;
+
+                            if (manager == null)
+                                return;
+
+                            manager.RemoveRemotePlayer(playerId);
+
+                            break;
+                        }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"Lỗi đọc gói dữ liệu: {ex.Message}");
+            }
+            finally
+            {
+                reader.Recycle();
+            }
+        };
     }
 
     private void Update()
@@ -190,6 +254,23 @@ public class NetworkManager : Singleton<NetworkManager>
             cancellation.Dispose();
             isConnecting = false;
         }
+    }
+
+    public void SendPlayerTransform(Vector3 position, float rotationY)
+    {
+        if (!IsConnected)
+            return;
+
+        var writer = new NetDataWriter();
+
+        writer.Put((byte)1);
+
+        writer.Put(position.x);
+        writer.Put(position.y);
+        writer.Put(position.z);
+        writer.Put(rotationY);
+
+        serverPeer.Send(writer, DeliveryMethod.Sequenced);
     }
 
     public void Disconnect()

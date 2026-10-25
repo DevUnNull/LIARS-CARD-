@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 public class AuthFormController : MonoBehaviour
 {
@@ -101,6 +102,11 @@ public class AuthFormController : MonoBehaviour
             else
             {
                 loginStatus.text = "Đã kết nối vào game!";
+                loginButton.interactable = true;
+                isBusy = false;
+
+                SceneManager.LoadScene("SampleScene");
+                yield break;
             }
         }
 

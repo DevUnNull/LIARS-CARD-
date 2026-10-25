@@ -1,4 +1,5 @@
 ﻿using LiteNetLib;
+using LiteNetLib.Utils;
 
 namespace Back_End.Services
 {
@@ -11,12 +12,14 @@ namespace Back_End.Services
         private PlayerConnectionService playerConnectionService;
         private ILogger<LobbyNetworkService> logger;
         private ConnectionTicketService ticketService;
+        private PlayerPositionService playerPositionService;
 
-        public LobbyNetworkService(PlayerConnectionService playerConnections, ILogger<LobbyNetworkService> logger, ConnectionTicketService ticketService)
+        public LobbyNetworkService(PlayerConnectionService playerConnections, ILogger<LobbyNetworkService> logger, ConnectionTicketService ticketService, PlayerPositionService playerPositionService)
         {
             playerConnectionService = playerConnections;
             this.logger = logger;
             this.ticketService = ticketService;
+            this.playerPositionService = playerPositionService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -96,14 +99,37 @@ namespace Back_End.Services
 
             listener.PeerDisconnectedEvent += (peer, info) =>
             {
-                string? playerId = playerConnectionService.GetPlayerId(peer);
+                string? playerId =
+                    playerConnectionService.GetPlayerId(peer);
 
                 playerConnectionService.RemoveByConnection(peer);
 
-                logger.LogInformation("Disconnected: {ConnectionId}, PlayerId: {PlayerId}, Reason: {Reason}.", peer.Id, playerId, info.Reason);
+                if (playerId != null)
+                {
+                    playerPositionService.Remove(playerId);
+
+                    var writer = new NetDataWriter();
+                    writer.Put((byte)3);
+                    writer.Put(playerId);
+
+                    foreach (var entry in playerConnectionService.GetAll())
+                    {
+                        NetPeer targetPeer = entry.Value;
+
+                        if (targetPeer.ConnectionState != ConnectionState.Connected)
+                            continue;
+
+                        targetPeer.Send(writer, DeliveryMethod.ReliableOrdered);
+                    }
+                }
+
+                logger.LogInformation(
+                    "Disconnected: {ConnectionId}, PlayerId: {PlayerId}, Reason: {Reason}",
+                    peer.Id, playerId, info.Reason);
             };
 
-            listener.NetworkReceiveEvent += (peer, reader, channel, deliveryMethod) =>
+            listener.NetworkReceiveEvent +=
+            (peer, reader, channel, deliveryMethod) =>
             {
                 try
                 {
@@ -115,6 +141,30 @@ namespace Back_End.Services
                         peer.Disconnect();
                         return;
                     }
+
+                    if (reader.AvailableBytes != 17)
+                        return;
+
+                    byte packetType = reader.GetByte();
+
+                    if (packetType != 1)
+                        return;
+
+                    float x = reader.GetFloat();
+                    float y = reader.GetFloat();
+                    float z = reader.GetFloat();
+                    float rotationY = reader.GetFloat();
+
+                    if (!float.IsFinite(x) ||
+                        !float.IsFinite(y) ||
+                        !float.IsFinite(z) ||
+                        !float.IsFinite(rotationY))
+                    {
+                        return;
+                    }
+
+                    playerPositionService.Update(playerId, x, y, z, rotationY);
+                    BroadcastPlayerPosition(playerId, x, y, z, rotationY);
                 }
                 finally
                 {
@@ -137,14 +187,42 @@ namespace Back_End.Services
 
                     await Task.Delay(15, stoppingToken);
                 }
-            } catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
 
-            } finally
+            }
+            finally
             {
                 server.Stop();
                 playerConnectionService.Clear();
+                playerPositionService.Clear();
                 logger.LogInformation("LiteNetLib stopped");
+            }
+        }
+
+        private void BroadcastPlayerPosition(string playerId, float x, float y, float z, float rotationY)
+        {
+            var writer = new NetDataWriter();
+            writer.Put((byte)2);
+
+            writer.Put(playerId);
+            writer.Put(x);
+            writer.Put(y);
+            writer.Put(z);
+            writer.Put(rotationY);
+
+            foreach (var entry in playerConnectionService.GetAll())
+            {
+                if (entry.Key == playerId)
+                    continue;
+
+                NetPeer targetPeer = entry.Value;
+
+                if (targetPeer.ConnectionState != ConnectionState.Connected)
+                    continue;
+
+                targetPeer.Send(writer, DeliveryMethod.ReliableOrdered);
             }
         }
     }
