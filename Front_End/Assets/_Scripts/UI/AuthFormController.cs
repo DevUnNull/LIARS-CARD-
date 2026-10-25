@@ -1,8 +1,10 @@
 
 using System.Collections;
+using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 public class AuthFormController : MonoBehaviour
 {
@@ -60,15 +62,53 @@ public class AuthFormController : MonoBehaviour
         loginButton.interactable = false;
         loginStatus.text = "Đang đăng nhập...";
 
+        Task connectTask = null;
+
         yield return authApi.Login(
             loginEmail.text,
             loginPassword.text,
             (success, message) =>
             {
                 loginStatus.text = message;
+
                 if (success)
-                    Debug.Log("Login thành công!");
+                {
+                    if (NetworkManager.Instance == null)
+                    {
+                        loginStatus.text = "Chưa có NetworkManager trong scene.";
+                        return;
+                    }
+
+                    loginStatus.text = "Đang kết nối vào game...";
+
+                    connectTask = NetworkManager.Instance.ConnectAsync(
+                        authApi.AccessToken);
+                }
             });
+
+        if (connectTask != null)
+        {
+            yield return new WaitUntil(() => connectTask.IsCompleted);
+
+            if (connectTask.IsCanceled)
+            {
+                loginStatus.text = "Đã hủy kết nối.";
+            }
+            else if (connectTask.IsFaulted)
+            {
+                loginStatus.text =
+                    connectTask.Exception.GetBaseException().Message;
+            }
+            else
+            {
+                loginStatus.text = "Đã kết nối vào game!";
+                loginButton.interactable = true;
+                isBusy = false;
+
+                SceneManager.LoadScene("SampleScene");
+                yield break;
+            }
+        }
 
         loginButton.interactable = true;
         isBusy = false;

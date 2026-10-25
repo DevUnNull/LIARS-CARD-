@@ -119,6 +119,55 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &17420868
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 17420869}
+  - component: {fileID: 17420870}
+  m_Layer: 0
+  m_Name: NetworkManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &17420869
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 17420868}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &17420870
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 17420868}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b7b94a2b90029d4ea12cce7bde36c42, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkManager
+  apiBaseUrl: http://localhost:5280
+  serverAddress: 127.0.0.1
+  serverPort: 9050
+  httpTimeoutSeconds: 15
+  connectTimeoutSeconds: 10
 --- !u!1 &112486604
 GameObject:
   m_ObjectHideFlags: 0
@@ -4599,7 +4648,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0cf1d6f92d9d7348a13b2823c05b0be, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AuthApiClient
-  baseUrl: http://localhost:5000
+  baseUrl: http://localhost:5280
 --- !u!4 &1830674068
 Transform:
   m_ObjectHideFlags: 0
@@ -5257,3 +5306,4 @@ SceneRoots:
   - {fileID: 1063268436}
   - {fileID: 839607261}
   - {fileID: 1830674068}
+  - {fileID: 17420869}

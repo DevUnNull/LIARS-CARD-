@@ -134,6 +134,10 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddSingleton<PlayerConnectionService>();
+builder.Services.AddHostedService<LobbyNetworkService>();
+builder.Services.AddSingleton<ConnectionTicketService>();
+builder.Services.AddSingleton<PlayerPositionService>();
 
 var app = builder.Build();
 
