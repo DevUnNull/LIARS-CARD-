@@ -6,6 +6,10 @@ namespace LiarsCard.Network
 {
     public class CardBattleDemoUI : MonoBehaviour
     {
+        [Header("Lobby / Table Setup")]
+        public int tableId = 1;
+        public int seatIndex = 0;
+
         [Header("Match Setup")]
         public string matchId = "match_001";
         [TextArea(2, 3)]
@@ -22,7 +26,7 @@ namespace LiarsCard.Network
         public List<CardDto> myCards = new List<CardDto>();
         public List<bool> selectedCards = new List<bool>();
 
-        private string statusLog = "San sang. Nhan 'Ready' hoac 'Get Hand' de bat dau van bai.";
+        private string statusLog = "San sang. Hay ngoi vao ban, ready hoac nhap Match ID.";
         private float pollTimer = 0f;
 
         private void Start()
@@ -42,11 +46,70 @@ namespace LiarsCard.Network
         private void Update()
         {
             pollTimer += Time.deltaTime;
-            if (pollTimer >= 2.0f && !string.IsNullOrEmpty(matchId) && !string.IsNullOrEmpty(jwtToken))
+            if (pollTimer >= 2.0f && !string.IsNullOrEmpty(jwtToken))
             {
                 pollTimer = 0f;
-                RefreshState(silent: true);
+                if (!string.IsNullOrEmpty(matchId))
+                {
+                    RefreshState(silent: true);
+                }
             }
+        }
+
+        public void ActionSitDown()
+        {
+            statusLog = $"Dang ngoi vao Ban {tableId}, Ghe {seatIndex}...";
+            StartCoroutine(MatchApiClient.Instance.SitDown(tableId, seatIndex, jwtToken,
+                onSuccess: res =>
+                {
+                    statusLog = $"[NGOI GHE THANH CONG] Ban {tableId}, Ghe {seatIndex}. Hay bam 'San Sang Ban'.";
+                    ActionCheckTable();
+                },
+                onError: err => statusLog = $"Loi ngoi ghe: {err}"
+            ));
+        }
+
+        public void ActionTableReady()
+        {
+            statusLog = "Dang cap nhat San Sang tai ban...";
+            StartCoroutine(MatchApiClient.Instance.SetTableReady(true, jwtToken,
+                onSuccess: res =>
+                {
+                    statusLog = "[SAN SANG THANH CONG] Da ready tai ban! Neu la Chu ban, hay bam 'Bat Dau Tran Dau'.";
+                    ActionCheckTable();
+                },
+                onError: err => statusLog = $"Loi ready ban: {err}"
+            ));
+        }
+
+        public void ActionStartTableMatch()
+        {
+            statusLog = $"[CHU BAN] Dang yeu cau Server bat dau tran dau tai Ban {tableId}...";
+            StartCoroutine(MatchApiClient.Instance.StartTableMatch(tableId, jwtToken,
+                onSuccess: res =>
+                {
+                    matchId = res.matchId;
+                    statusLog = $"[TAO TRAN THANH CONG] Match ID: {res.matchId}. Tat ca nguoi choi tu dong dong bo!";
+                    ActionReady();
+                },
+                onError: err => statusLog = $"Loi bat dau tran: {err}"
+            ));
+        }
+
+        public void ActionCheckTable()
+        {
+            StartCoroutine(MatchApiClient.Instance.GetTable(tableId, jwtToken,
+                onSuccess: res =>
+                {
+                    statusLog = $"[BAN {res.tableId}] Trang thai: {res.status} | Chu ban: {res.hostPlayerId} | So nguoi: {res.playerCount}/{res.capacity}";
+                    if (!string.IsNullOrEmpty(res.currentMatchId))
+                    {
+                        matchId = res.currentMatchId;
+                        statusLog += $" | Match dang dien ra: {res.currentMatchId}";
+                    }
+                },
+                onError: err => statusLog = $"Loi lay thong tin ban: {err}"
+            ));
         }
 
         public void ActionReady()
@@ -127,14 +190,14 @@ namespace LiarsCard.Network
                 targetPlayId = lastPlayId
             };
 
-            statusLog = "DANG TO CAO DOI THU (CALL BLUFF)...";
+            statusLog = $"Dang to cao luot danh {lastPlayId}...";
             StartCoroutine(MatchApiClient.Instance.Challenge(matchId, jwtToken, req,
                 onSuccess: res =>
                 {
                     stateVersion = res.stateVersion;
-                    string liarResult = res.challengeSucceeded ? "TO CAO DUNG! Doi thu da noi doi (Bluff)!" : "TO CAO SAI! Doi thu danh that!";
-                    string gunResult = res.eliminated ? "-> BUM! TRUNG DAN! Nguoi choi bi loai!" : "-> CACH! Song sot qua buong dan trong!";
-                    statusLog = $"{liarResult}\nNguoi bi phat: {res.penalizedPlayerId} {gunResult}\nNext Phase: {res.nextPhase}";
+                    string outcome = res.challengeSucceeded ? "TO CAO DUNG! (Co nguoi noi doi)" : "TO CAO SAI! (Bai hoan toan hop le)";
+                    string penalty = res.eliminated ? "BI LOAI (RUT SUNG TRUNG DAN)" : (res.survived ? "MAY MAN SONG SOT (PHEW)" : "DAN BAN KHONG TRUNG");
+                    statusLog = $"KET QUA TO CAO: {outcome}\nNguoi bi phat: {res.penalizedPlayerId} -> {penalty}\nGiai doan tiep theo: {res.nextPhase}";
                     ActionGetHand();
                     RefreshState(silent: true);
                 },
@@ -146,7 +209,7 @@ namespace LiarsCard.Network
         {
             StartCoroutine(MatchApiClient.Instance.GetState(matchId, jwtToken,
                 onSuccess: res => ApplyState(res),
-                onError: err => { if (!silent) statusLog = $"Loi cap nhat state: {err}"; }
+                onError: err => { if (!silent) statusLog = $"Loi Refresh: {err}"; }
             ));
         }
 
@@ -161,14 +224,39 @@ namespace LiarsCard.Network
 
         private void OnGUI()
         {
-            GUI.Box(new Rect(10, 10, 520, 620), "LIARS CARD â€” GAMEPLAY DEMO (CORE SCENE)");
+            GUI.skin.box.fontSize = 14;
+            GUI.skin.button.fontSize = 13;
+            GUI.skin.label.fontSize = 13;
 
-            GUILayout.BeginArea(new Rect(20, 35, 500, 585));
+            GUILayout.BeginArea(new Rect(20, 20, 520, 680), GUI.skin.box);
 
-            GUILayout.Label("<b>1. THIET LAP KET NOI (CONNECTION)</b>");
+            GUILayout.Label("<size=16><b>♠♥ LIARS CARD - GAMEPLAY CONTROLLER ♦♣</b></size>");
+            GUILayout.Space(4);
+
+            // 0. LOBBY & TABLE
+            GUILayout.Label("<b>0. CHON BAN & GHE (LOBBY TABLE - PHUONG AN B)</b>");
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Ban ID:", GUILayout.Width(60));
+            int.TryParse(GUILayout.TextField(tableId.ToString(), GUILayout.Width(40)), out tableId);
+            GUILayout.Label("Ghe (0-3):", GUILayout.Width(65));
+            int.TryParse(GUILayout.TextField(seatIndex.ToString(), GUILayout.Width(40)), out seatIndex);
+            if (GUILayout.Button("Ngoi Ghe")) ActionSitDown();
+            if (GUILayout.Button("Ready Ban")) ActionTableReady();
+            if (GUILayout.Button("Check")) ActionCheckTable();
+            GUILayout.EndHorizontal();
+
+            GUI.color = new Color(1f, 0.7f, 0.2f);
+            if (GUILayout.Button("<b>[CHU BAN] BAT DAU TRAN DAU (START MATCH)</b>", GUILayout.Height(30))) ActionStartTableMatch();
+            GUI.color = Color.white;
+
+            GUILayout.Space(6);
+
+            // 1. MATCH CONFIG
+            GUILayout.Label("<b>1. CAU HINH TRAN DAU (MATCH CONFIG)</b>");
             GUILayout.BeginHorizontal();
             GUILayout.Label("Match ID:", GUILayout.Width(75));
             matchId = GUILayout.TextField(matchId);
+            if (GUILayout.Button("Refresh", GUILayout.Width(70))) RefreshState();
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
@@ -177,11 +265,11 @@ namespace LiarsCard.Network
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Bao San Sang (Ready)", GUILayout.Height(30))) ActionReady();
-            if (GUILayout.Button("Lay Bai (Get Hand)", GUILayout.Height(30))) ActionGetHand();
+            if (GUILayout.Button("Bao San Sang (Ready)", GUILayout.Height(28))) ActionReady();
+            if (GUILayout.Button("Lay Bai (Get Hand)", GUILayout.Height(28))) ActionGetHand();
             GUILayout.EndHorizontal();
 
-            GUILayout.Space(8);
+            GUILayout.Space(6);
             GUILayout.Label("<b>2. TRANG THAI BAN (TABLE STATE)</b>");
             GUILayout.Label($"Vong: <b>{roundNumber}</b> | Rank Ban: <color=yellow><b>{tableRank}</b></color> | State Version: <b>{stateVersion}</b>");
             GUILayout.Label($"Luot danh hien tai: <b>{currentTurnPlayerId}</b>");
@@ -190,7 +278,7 @@ namespace LiarsCard.Network
                 GUILayout.Label($"Luot danh gan nhat: <color=cyan>{lastPlayId}</color>");
             }
 
-            GUILayout.Space(8);
+            GUILayout.Space(6);
             GUILayout.Label("<b>3. BAI TREN TAY (CHON 1-3 LA DE DANH / BLUFF)</b>");
             if (myCards.Count == 0)
             {
@@ -209,20 +297,20 @@ namespace LiarsCard.Network
                 }
             }
 
-            GUILayout.Space(8);
+            GUILayout.Space(6);
             GUILayout.BeginHorizontal();
             GUI.color = Color.green;
-            if (GUILayout.Button("DANH BAI (PLAY CARDS)", GUILayout.Height(35))) ActionPlayCards();
+            if (GUILayout.Button("DANH BAI (PLAY CARDS)", GUILayout.Height(32))) ActionPlayCards();
 
             GUI.color = Color.red;
-            if (GUILayout.Button("TO CAO (CHALLENGE / LIAR)", GUILayout.Height(35))) ActionChallenge();
+            if (GUILayout.Button("TO CAO (CHALLENGE / LIAR)", GUILayout.Height(32))) ActionChallenge();
             GUI.color = Color.white;
             GUILayout.EndHorizontal();
 
-            GUILayout.Space(8);
+            GUILayout.Space(6);
             GUILayout.Label("<b>4. NHAT KY VAN BAI (LOG):</b>");
             GUI.color = Color.yellow;
-            GUILayout.TextArea(statusLog, GUILayout.Height(105));
+            GUILayout.TextArea(statusLog, GUILayout.Height(95));
             GUI.color = Color.white;
 
             GUILayout.EndArea();

@@ -144,6 +144,99 @@ namespace LiarsCard.Network
             }
         }
 
+        public IEnumerator GetTable(int tableId, string token, Action<TableResponseDto> onSuccess, Action<string> onError)
+        {
+            string url = $"{baseUrl}/api/tables/{tableId}";
+            using (UnityWebRequest req = UnityWebRequest.Get(url))
+            {
+                SetupRequest(req, token);
+                yield return req.SendWebRequest();
+
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    var res = JsonUtility.FromJson<TableResponseDto>(req.downloadHandler.text);
+                    onSuccess?.Invoke(res);
+                }
+                else
+                {
+                    onError?.Invoke(ExtractError(req));
+                }
+            }
+        }
+
+        public IEnumerator SitDown(int tableId, int seatIndex, string token, Action<string> onSuccess, Action<string> onError)
+        {
+            string url = $"{baseUrl}/api/tables/{tableId}/sit";
+            string bodyJson = $"{{\"seatIndex\":{seatIndex}}}";
+            using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
+            {
+                byte[] bodyRaw = Encoding.UTF8.GetBytes(bodyJson);
+                req.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                req.downloadHandler = new DownloadHandlerBuffer();
+                req.SetRequestHeader("Content-Type", "application/json");
+                SetupRequest(req, token);
+
+                yield return req.SendWebRequest();
+
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    onSuccess?.Invoke(req.downloadHandler.text);
+                }
+                else
+                {
+                    onError?.Invoke(ExtractError(req));
+                }
+            }
+        }
+
+        public IEnumerator SetTableReady(bool ready, string token, Action<string> onSuccess, Action<string> onError)
+        {
+            string url = $"{baseUrl}/api/tables/ready";
+            string bodyJson = $"{{\"ready\":{(ready ? "true" : "false")}}}";
+            using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
+            {
+                byte[] bodyRaw = Encoding.UTF8.GetBytes(bodyJson);
+                req.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                req.downloadHandler = new DownloadHandlerBuffer();
+                req.SetRequestHeader("Content-Type", "application/json");
+                SetupRequest(req, token);
+
+                yield return req.SendWebRequest();
+
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    onSuccess?.Invoke(req.downloadHandler.text);
+                }
+                else
+                {
+                    onError?.Invoke(ExtractError(req));
+                }
+            }
+        }
+
+        public IEnumerator StartTableMatch(int tableId, string token, Action<StartMatchResponseDto> onSuccess, Action<string> onError)
+        {
+            string url = $"{baseUrl}/api/tables/{tableId}/start-match";
+            using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
+            {
+                req.downloadHandler = new DownloadHandlerBuffer();
+                req.SetRequestHeader("Content-Type", "application/json");
+                SetupRequest(req, token);
+
+                yield return req.SendWebRequest();
+
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    var res = JsonUtility.FromJson<StartMatchResponseDto>(req.downloadHandler.text);
+                    onSuccess?.Invoke(res);
+                }
+                else
+                {
+                    onError?.Invoke(ExtractError(req));
+                }
+            }
+        }
+
         private void SetupRequest(UnityWebRequest req, string token)
         {
             req.certificateHandler = new BypassCertificateHandler();

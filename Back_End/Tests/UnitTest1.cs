@@ -658,5 +658,92 @@ namespace Back_End.Tests
                 Assert.Equal(5, playerDto.RemainingCardCount);
             }
         }
+
+        // 26. Table SitDown gán Host cho người đầu tiên và cập nhật đúng thông tin.
+        [Fact]
+        public void Test26_TableSitAssignsHostAndTracksSeats()
+        {
+            var tableService = new TableService();
+            var err1 = tableService.SitDown(1, 0, "p1");
+            Assert.Null(err1);
+
+            var table = tableService.GetTableByID(1);
+            Assert.NotNull(table);
+            Assert.Equal("p1", table.HostPlayerId);
+            Assert.Equal(1, table.PlayerCount);
+
+            var err2 = tableService.SitDown(1, 1, "p2");
+            Assert.Null(err2);
+
+            table = tableService.GetTableByID(1);
+            Assert.NotNull(table);
+            Assert.Equal("p1", table.HostPlayerId); // Host vẫn là p1
+            Assert.Equal(2, table.PlayerCount);
+        }
+
+        // 27. Chủ bàn bắt đầu trận đấu: Thất bại nếu chưa đủ 2 người chơi.
+        [Fact]
+        public void Test27_TableStartMatch_FailsWhenInsufficientPlayers()
+        {
+            var tableService = new TableService();
+            tableService.SitDown(1, 0, "host_player");
+
+            var (error, playerIds) = tableService.ValidateAndStartMatch(1, "host_player");
+            Assert.Equal("INSUFFICIENT_PLAYERS", error);
+            Assert.Null(playerIds);
+        }
+
+        // 28. Chủ bàn bắt đầu trận đấu: Thất bại nếu người gọi không phải chủ bàn.
+        [Fact]
+        public void Test28_TableStartMatch_FailsWhenNotHost()
+        {
+            var tableService = new TableService();
+            tableService.SitDown(1, 0, "host_player");
+            tableService.SitDown(1, 1, "member_player");
+            tableService.SetReady("member_player", true);
+
+            var (error, playerIds) = tableService.ValidateAndStartMatch(1, "member_player");
+            Assert.Equal("NOT_TABLE_HOST", error);
+            Assert.Null(playerIds);
+        }
+
+        // 29. Chủ bàn bắt đầu trận đấu: Thất bại nếu có thành viên chưa sẵn sàng.
+        [Fact]
+        public void Test29_TableStartMatch_FailsWhenMembersNotReady()
+        {
+            var tableService = new TableService();
+            tableService.SitDown(1, 0, "host_player");
+            tableService.SitDown(1, 1, "member_player");
+            // member_player chưa gọi ready
+
+            var (error, playerIds) = tableService.ValidateAndStartMatch(1, "host_player");
+            Assert.Equal("TABLE_NOT_READY", error);
+            Assert.Null(playerIds);
+        }
+
+        // 30. Chủ bàn bắt đầu trận đấu: Thành công khi đủ người và mọi người đã ready.
+        [Fact]
+        public void Test30_TableStartMatch_SucceedsWhenValid()
+        {
+            var tableService = new TableService();
+            tableService.SitDown(1, 0, "host_player");
+            tableService.SitDown(1, 1, "member_player");
+            tableService.SetReady("member_player", true);
+
+            var (error, playerIds) = tableService.ValidateAndStartMatch(1, "host_player");
+            Assert.Null(error);
+            Assert.NotNull(playerIds);
+            Assert.Equal(2, playerIds.Count);
+            Assert.Equal("host_player", playerIds[0]);
+            Assert.Equal("member_player", playerIds[1]);
+
+            var table = tableService.GetTableByID(1);
+            Assert.Equal(TableStatus.Playing, table!.Status);
+
+            // Gán MatchId
+            tableService.SetCurrentMatch(1, "m_table_1_xyz");
+            table = tableService.GetTableByID(1);
+            Assert.Equal("m_table_1_xyz", table!.CurrentMatchId);
+        }
     }
 }

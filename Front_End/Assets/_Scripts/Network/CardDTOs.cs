@@ -91,4 +91,33 @@ namespace LiarsCard.Network
         public string message;
         public int? currentVersion;
     }
+
+    [Serializable]
+    public class SeatResponseDto
+    {
+        public int seatIndex;
+        public string playerId;
+        public bool isReady;
+    }
+
+    [Serializable]
+    public class TableResponseDto
+    {
+        public int tableId;
+        public int status;
+        public string hostPlayerId;
+        public string currentMatchId;
+        public int capacity;
+        public int playerCount;
+        public List<SeatResponseDto> seats = new List<SeatResponseDto>();
+    }
+
+    [Serializable]
+    public class StartMatchResponseDto
+    {
+        public int tableId;
+        public string matchId;
+        public string message;
+        public List<string> playerIds = new List<string>();
+    }
 }
