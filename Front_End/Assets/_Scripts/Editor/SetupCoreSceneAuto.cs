@@ -1,18 +1,12 @@
-﻿using UnityEditor;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using LiarsCard.Network;
 
 namespace LiarsCard.Editor
 {
-    [InitializeOnLoad]
     public static class SetupCoreSceneAuto
     {
-        static SetupCoreSceneAuto()
-        {
-            EditorApplication.delayCall += SetupScene;
-        }
-
         [MenuItem("Liars Card/Setup CoreScene Demo Now")]
         public static void SetupScene()
         {
