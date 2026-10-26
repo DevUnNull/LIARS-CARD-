@@ -21,6 +21,10 @@ public class FirstPersonMovement : MonoBehaviour
     private void Start()
     {
         CursorManager.Instance.HideCursor();
+    }
+
+    private void OnEnable()
+    {
         playerInput = new InputPlayer();
         playerInput.Enable();
     }

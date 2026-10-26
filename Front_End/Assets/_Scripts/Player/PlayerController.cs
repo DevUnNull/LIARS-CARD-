@@ -4,9 +4,19 @@ public class PlayerController : Singleton<PlayerController>
 {
     public FirstPersonLook firstPersonLook;
     public FirstPersonMovement firstPersonMovement;
+    public FirstPersonInteract firstPersonInteract;
 
     [SerializeField] private float sendInterval = 0.05f;
     private float sendTimer;
+
+    protected override void Awake()
+    {
+        base.Awake();
+
+        firstPersonInteract = GetComponent<FirstPersonInteract>();
+        firstPersonLook = GetComponent<FirstPersonLook>();
+        firstPersonMovement = GetComponent<FirstPersonMovement>();
+    }
 
     private void LateUpdate()
     {

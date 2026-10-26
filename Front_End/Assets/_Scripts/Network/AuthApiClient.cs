@@ -5,10 +5,20 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 
-public class AuthApiClient : MonoBehaviour
+public class AuthApiClient : Singleton<AuthApiClient>
 {
+    protected override void Awake()
+    {
+        base.Awake();
+
+        if (Instance != this)
+            return;
+
+        DontDestroyOnLoad(gameObject);
+    }
+
     [SerializeField]
-    private string baseUrl = "http://localhost:5000";
+    public string baseUrl = "http://localhost:5000";
 
     public string AccessToken { get; private set; }
     public string RefreshToken { get; private set; }
@@ -70,6 +80,12 @@ public class AuthApiClient : MonoBehaviour
     {
         public string message;
         public string title;
+    }
+
+    [Serializable]
+    public class SitDownData
+    {
+        public int seatIndex;
     }
 
     public IEnumerator Register(
