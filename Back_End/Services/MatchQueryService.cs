@@ -1,6 +1,7 @@
 using Back_End.DTOs;
 using Back_End.Exceptions;
 using Back_End.Infrastructure.MatchState;
+using Back_End.Models;
 
 namespace Back_End.Services
 {
@@ -21,6 +22,29 @@ namespace Back_End.Services
                 throw GameRuleException.MatchNotFound();
             }
 
+            return MapPublicState(match);
+        }
+
+        public async Task<PublicMatchStateResponse> GetPublicStateAsync(
+            string matchId,
+            string? currentPlayerId)
+        {
+            using (await _matchStore.LockMatchAsync(matchId))
+            {
+                var match = _matchStore.GetMatch(matchId);
+                if (match == null)
+                {
+                    throw GameRuleException.MatchNotFound();
+                }
+
+                var response = MapPublicState(match);
+                response.CurrentPlayerId = currentPlayerId;
+                return response;
+            }
+        }
+
+        private static PublicMatchStateResponse MapPublicState(GameMatch match)
+        {
             var response = new PublicMatchStateResponse
             {
                 MatchId = match.MatchId,

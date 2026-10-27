@@ -4,25 +4,47 @@ using Back_End.Infrastructure.MatchState;
 using Back_End.Models;
 using Back_End.Rules;
 using Back_End.Services;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Back_End.Tests
 {
     public class LiarsCardTests
     {
-        private (DeckActionService actionService, ChallengeService challengeService, MatchService matchService, MatchQueryService queryService, InMemoryMatchStore store, DeckRoundService roundService, PenaltyService penaltyService) CreateTestSystem()
+        private (DeckActionService actionService, ChallengeService challengeService, MatchService matchService, MatchQueryService queryService, InMemoryMatchStore store, DeckRoundService roundService, PenaltyService penaltyService, TestGameplayStateNotifier gameplayNotifier) CreateTestSystem()
         {
             var store = new InMemoryMatchStore();
             var ruleEngine = new DeckRuleEngine();
             var turnStateMachine = new TurnStateMachine();
             var roundService = new DeckRoundService(turnStateMachine);
-            var penaltyService = new PenaltyService(roundService);
+            var penaltyService = new PenaltyService(ruleEngine);
             var actionService = new DeckActionService(store, ruleEngine, turnStateMachine);
-            var challengeService = new ChallengeService(store, ruleEngine, penaltyService);
+            var animationService = new PenaltyAnimationService(
+                store,
+                new TestPenaltyAnimationNotifier(),
+                TimeProvider.System,
+                Options.Create(new PenaltyAnimationOptions()),
+                NullLogger<PenaltyAnimationService>.Instance);
+            var gameplayNotifier = new TestGameplayStateNotifier();
+            var resultService = new MatchResultService(
+                store,
+                new TestMatchResultRepository(),
+                TimeProvider.System,
+                NullLogger<MatchResultService>.Instance);
+            var challengeService = new ChallengeService(
+                store,
+                ruleEngine,
+                penaltyService,
+                roundService,
+                animationService,
+                gameplayNotifier,
+                resultService);
             var matchService = new MatchService(store, roundService);
             var queryService = new MatchQueryService(store);
 
-            return (actionService, challengeService, matchService, queryService, store, roundService, penaltyService);
+            return (actionService, challengeService, matchService, queryService, store, roundService, penaltyService, gameplayNotifier);
         }
 
         private GameMatch CreateActiveMatchWithPlayers(MatchService matchService, InMemoryMatchStore store, int playerCount = 2, string fixedRank = "K")
@@ -402,6 +424,47 @@ namespace Back_End.Tests
             Assert.Equal("INVALID_PHASE", ex.Code);
         }
 
+        [Fact]
+        public void PenaltyRejectsInvalidPhaseWithoutPullingTrigger()
+        {
+            var sys = CreateTestSystem();
+            var match = CreateActiveMatchWithPlayers(sys.matchService, sys.store, 2);
+            var player = match.Players[0];
+            player.Revolver = new PlayerRevolver(bulletChamber: 0, currentChamber: 0);
+            match.Phase = RoundPhase.PenaltyResolution;
+
+            Assert.Throws<GameRuleException>(() =>
+                sys.penaltyService.ApplyPenalty(match, match.CurrentTurnPlayerId!));
+            Assert.Equal(0, player.Revolver.PullsCount);
+            Assert.True(player.IsAlive);
+        }
+
+        [Fact]
+        public void PenaltyRejectsInvalidRevolverStateWithoutResolvingChallenge()
+        {
+            var sys = CreateTestSystem();
+            var match = CreateActiveMatchWithPlayers(sys.matchService, sys.store, 2);
+            var challengerId = match.CurrentTurnPlayerId!;
+            var playOwner = match.Players.First(p => p.PlayerId != challengerId);
+            var penalizedPlayer = match.FindPlayer(challengerId)!;
+            penalizedPlayer.Revolver = new PlayerRevolver(bulletChamber: 0, currentChamber: 0)
+            {
+                BulletChamber = PlayerRevolver.MaxChambers
+            };
+            match.LastPlay = new LastPlay
+            {
+                PlayerId = playOwner.PlayerId,
+                CardCount = 1,
+                Cards = new List<Card> { new("test-card", match.TableRank) }
+            };
+
+            Assert.Throws<InvalidOperationException>(() =>
+                sys.penaltyService.ApplyPenalty(match, challengerId));
+            Assert.False(match.LastPlay.Resolved);
+            Assert.Equal(RoundPhase.AwaitPlayOrChallenge, match.Phase);
+            Assert.Equal(0, penalizedPlayer.Revolver.PullsCount);
+        }
+
         // 16. Người hết bài được bỏ qua đúng luật.
         [Fact]
         public void Test16_PlayerOutOfCardsIsSkipped()
@@ -525,13 +588,20 @@ namespace Back_End.Tests
             var sys = CreateTestSystem();
             var match = CreateActiveMatchWithPlayers(sys.matchService, sys.store, 2);
 
-            var p1 = match.Players[0];
-            var p2 = match.Players[1];
+            var challengerId = match.CurrentTurnPlayerId!;
+            var p1 = match.FindPlayer(challengerId)!;
+            var p2 = match.Players.First(p => p.PlayerId != challengerId);
 
             // Set p1 revolver so it hits bullet on pull
             p1.Revolver = new PlayerRevolver(bulletChamber: 0, currentChamber: 0);
+            match.LastPlay = new LastPlay
+            {
+                PlayerId = p2.PlayerId,
+                CardCount = 1,
+                Cards = new List<Card> { new("test-card", match.TableRank) }
+            };
 
-            var res = sys.penaltyService.ApplyPenalty(match, p1.PlayerId);
+            var res = sys.penaltyService.ApplyPenalty(match, challengerId);
 
             Assert.True(res.Eliminated);
             Assert.False(res.Survived);
@@ -601,8 +671,89 @@ namespace Back_End.Tests
 
             Assert.Equal(challengeRes1.StateVersion, challengeRes2.StateVersion);
             Assert.Equal(challengeRes1.PenalizedPlayerId, challengeRes2.PenalizedPlayerId);
+            Assert.Equal(match.Phase.ToString(), challengeRes1.NextPhase);
             Assert.Equal(pullsCountAfterFirst, p2.Revolver.PullsCount);
             Assert.Equal(versionAfterFirst, match.StateVersion);
+        }
+
+        [Fact]
+        public async Task ChallengeIgnoresClientSuppliedPenaltyOutcome()
+        {
+            var sys = CreateTestSystem();
+            var match = CreateActiveMatchWithPlayers(sys.matchService, sys.store, 2, fixedRank: "K");
+
+            string playOwnerId = match.CurrentTurnPlayerId!;
+            var playOwner = match.FindPlayer(playOwnerId)!;
+            string challengerId = match.Players.First(p => p.PlayerId != playOwnerId).PlayerId;
+            playOwner.Hand[0] = new Card("bluff-card", Card.RankQueen);
+            playOwner.Revolver = new PlayerRevolver(bulletChamber: 0, currentChamber: 0);
+
+            var playResult = await sys.actionService.PlayCardsAsync(match.MatchId, playOwnerId, new PlayCardsRequest
+            {
+                ActionId = Guid.NewGuid(),
+                ExpectedVersion = match.StateVersion,
+                CardInstanceIds = new List<string> { "bluff-card" }
+            });
+
+            var actionId = Guid.NewGuid();
+            var fakeClientRequest = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                actionId,
+                expectedVersion = match.StateVersion,
+                targetPlayId = playResult.PlayId,
+                challengeSucceeded = false,
+                penalizedPlayerId = challengerId,
+                survived = true,
+                eliminated = false,
+                bulletChamber = 5,
+                isAlive = true
+            });
+            var request = System.Text.Json.JsonSerializer.Deserialize<ChallengeRequest>(
+                fakeClientRequest,
+                new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+
+            var result = await sys.challengeService.ChallengeAsync(match.MatchId, challengerId, request);
+
+            Assert.True(result.ChallengeSucceeded);
+            Assert.Equal(playOwnerId, result.PenalizedPlayerId);
+            Assert.False(result.Survived);
+            Assert.True(result.Eliminated);
+            Assert.False(playOwner.IsAlive);
+        }
+
+        [Fact]
+        public async Task ConcurrentDuplicateChallengesApplyPenaltyOnlyOnce()
+        {
+            var sys = CreateTestSystem();
+            var match = CreateActiveMatchWithPlayers(sys.matchService, sys.store, 2, fixedRank: "K");
+
+            string playOwnerId = match.CurrentTurnPlayerId!;
+            var playOwner = match.FindPlayer(playOwnerId)!;
+            string challengerId = match.Players.First(p => p.PlayerId != playOwnerId).PlayerId;
+            playOwner.Hand[0] = new Card("honest-card", Card.RankKing);
+            var challenger = match.FindPlayer(challengerId)!;
+            challenger.Revolver = new PlayerRevolver(bulletChamber: 5, currentChamber: 0);
+
+            var playResult = await sys.actionService.PlayCardsAsync(match.MatchId, playOwnerId, new PlayCardsRequest
+            {
+                ActionId = Guid.NewGuid(),
+                ExpectedVersion = match.StateVersion,
+                CardInstanceIds = new List<string> { "honest-card" }
+            });
+            var request = new ChallengeRequest
+            {
+                ActionId = Guid.NewGuid(),
+                ExpectedVersion = match.StateVersion,
+                TargetPlayId = playResult.PlayId
+            };
+
+            var results = await Task.WhenAll(
+                sys.challengeService.ChallengeAsync(match.MatchId, challengerId, request),
+                sys.challengeService.ChallengeAsync(match.MatchId, challengerId, request));
+
+            Assert.Equal(results[0].StateVersion, results[1].StateVersion);
+            Assert.Equal(results[0].PenalizedPlayerId, results[1].PenalizedPlayerId);
+            Assert.Equal(1, challenger.Revolver.PullsCount);
         }
 
         // 24. Request actionId cũ nhưng payload khác bị từ chối (DUPLICATE_ACTION).

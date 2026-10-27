@@ -1,5 +1,6 @@
 using Back_End.Data;
 using Back_End.Filters;
+using Back_End.Hubs;
 using Back_End.Infrastructure.MatchState;
 using Back_End.Models;
 using Back_End.Rules;
@@ -19,6 +20,7 @@ builder.Services.AddControllers(options =>
 {
     options.Filters.Add<GameExceptionFilter>();
 });
+builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 
 
@@ -79,6 +81,7 @@ builder.Services.AddSingleton<IMongoCollection<RevokedAccessToken>>(sp =>
     return database.GetCollection<RevokedAccessToken>(
         "revoked_access_tokens");
 });
+builder.Services.AddSingleton<IMatchResultRepository, MongoMatchResultRepository>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddSingleton<TableService>();
@@ -93,6 +96,16 @@ builder.Services.AddScoped<DeckActionService>();
 builder.Services.AddScoped<ChallengeService>();
 builder.Services.AddScoped<MatchService>();
 builder.Services.AddScoped<MatchQueryService>();
+builder.Services.AddScoped<IMatchResultService, MatchResultService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddOptions<PenaltyAnimationOptions>()
+    .BindConfiguration("PenaltyAnimation")
+    .Validate(options => options.AckTimeoutSeconds > 0, "Penalty animation ACK timeout must be greater than zero.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<IPenaltyAnimationNotifier, SignalRPenaltyAnimationNotifier>();
+builder.Services.AddSingleton<IPenaltyAnimationService, PenaltyAnimationService>();
+builder.Services.AddSingleton<IGameplayStateNotifier, SignalRGameplayStateNotifier>();
+builder.Services.AddHostedService<PenaltyAnimationTimeoutService>();
 
 
 var jwtKey = builder.Configuration["Jwt:Key"]
@@ -129,6 +142,18 @@ builder.Services
 
         options.Events = new JwtBearerEvents
         {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var requestPath = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    requestPath.StartsWithSegments("/hubs/penalty"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            },
             OnTokenValidated = async context =>
             {
                 var jti = context.Principal?.FindFirst("jti")?.Value;
@@ -164,6 +189,10 @@ builder.Services.AddSingleton<ConnectionTicketService>();
 builder.Services.AddSingleton<PlayerPositionService>();
 
 var app = builder.Build();
+
+await app.Services
+    .GetRequiredService<IMatchResultRepository>()
+    .EnsureIndexesAsync(CancellationToken.None);
 
 var revokedTokens = app.Services
     .GetRequiredService<IMongoCollection<RevokedAccessToken>>();
@@ -202,5 +231,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<PenaltyHub>("/hubs/penalty").RequireAuthorization();
 
 app.Run();

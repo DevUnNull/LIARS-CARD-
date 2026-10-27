@@ -8,6 +8,9 @@ namespace Back_End.Infrastructure.MatchState
         private readonly ConcurrentDictionary<string, GameMatch> _matches = new();
         private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
         private readonly ConcurrentDictionary<(string MatchId, Guid ActionId), ActionResultRecord> _actions = new();
+        private readonly ConcurrentDictionary<(string MatchId, Guid PenaltyEventId), PenaltyAnimationSession> _penaltyAnimations = new();
+        private readonly ConcurrentDictionary<(string MatchId, Guid PenaltyEventId), byte> _pendingPenaltyAnimations = new();
+        private readonly ConcurrentDictionary<(string MatchId, int StateVersion), byte> _publishedMatchEndEvents = new();
 
         public GameMatch? GetMatch(string matchId)
         {
@@ -26,7 +29,25 @@ namespace Back_End.Infrastructure.MatchState
 
         public bool DeleteMatch(string matchId)
         {
-            return _matches.TryRemove(matchId, out _);
+            bool deleted = _matches.TryRemove(matchId, out _);
+
+            foreach (var key in _actions.Keys.Where(key => key.MatchId == matchId))
+            {
+                _actions.TryRemove(key, out _);
+            }
+
+            foreach (var key in _penaltyAnimations.Keys.Where(key => key.MatchId == matchId))
+            {
+                _penaltyAnimations.TryRemove(key, out _);
+                _pendingPenaltyAnimations.TryRemove(key, out _);
+            }
+
+            foreach (var key in _publishedMatchEndEvents.Keys.Where(key => key.MatchId == matchId))
+            {
+                _publishedMatchEndEvents.TryRemove(key, out _);
+            }
+
+            return deleted;
         }
 
         public async Task<IDisposable> LockMatchAsync(string matchId)
@@ -57,6 +78,65 @@ namespace Back_End.Infrastructure.MatchState
                 CreatedAt = DateTime.UtcNow
             };
         }
+
+        public bool TryCreatePenaltyAnimation(PenaltyAnimationSession session)
+        {
+            var key = (session.MatchId, session.PenaltyEventId);
+            if (!_penaltyAnimations.TryAdd(key, session))
+            {
+                return false;
+            }
+
+            if (session.Status == PenaltyAnimationStatus.Pending)
+            {
+                _pendingPenaltyAnimations.TryAdd(key, 0);
+            }
+
+            return true;
+        }
+
+        public PenaltyAnimationSession? GetPenaltyAnimation(string matchId, Guid penaltyEventId)
+        {
+            return _penaltyAnimations.TryGetValue((matchId, penaltyEventId), out var session)
+                ? session
+                : null;
+        }
+
+        public IReadOnlyList<PenaltyAnimationSession> GetPenaltyAnimations(string matchId)
+        {
+            return _penaltyAnimations
+                .Where(entry => entry.Key.MatchId == matchId)
+                .Select(entry => entry.Value)
+                .ToArray();
+        }
+
+        public IReadOnlyList<(string MatchId, Guid PenaltyEventId)> GetPendingPenaltyAnimationIds()
+        {
+            return _pendingPenaltyAnimations.Keys
+                .Select(key => (key.MatchId, key.PenaltyEventId))
+                .ToArray();
+        }
+
+        public void SavePenaltyAnimation(PenaltyAnimationSession session)
+        {
+            var key = (session.MatchId, session.PenaltyEventId);
+            if (!_penaltyAnimations.ContainsKey(key))
+            {
+                throw new InvalidOperationException("Penalty animation session does not exist.");
+            }
+
+            if (session.Status == PenaltyAnimationStatus.Pending)
+            {
+                _pendingPenaltyAnimations.TryAdd(key, 0);
+            }
+            else
+            {
+                _pendingPenaltyAnimations.TryRemove(key, out _);
+            }
+        }
+
+        public bool TryMarkMatchEndedEventPublished(string matchId, int stateVersion) =>
+            _publishedMatchEndEvents.TryAdd((matchId, stateVersion), 0);
 
         private sealed class Releaser : IDisposable
         {

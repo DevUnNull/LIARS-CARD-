@@ -64,6 +64,35 @@ namespace LiarsCard.Network
             }
         }
 
+        public IEnumerator GetMatchResult(
+            string matchId,
+            string token,
+            Action<MatchResultResponse> onSuccess,
+            Action<string> onNotFound,
+            Action<string> onError)
+        {
+            string url = $"{baseUrl}/api/matches/{UnityWebRequest.EscapeURL(matchId)}/result";
+            using (UnityWebRequest req = UnityWebRequest.Get(url))
+            {
+                SetupRequest(req, token);
+                yield return req.SendWebRequest();
+
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    var result = JsonUtility.FromJson<MatchResultResponse>(req.downloadHandler.text);
+                    onSuccess?.Invoke(result);
+                }
+                else if (req.responseCode == 404)
+                {
+                    onNotFound?.Invoke(ExtractError(req));
+                }
+                else
+                {
+                    onError?.Invoke(ExtractError(req));
+                }
+            }
+        }
+
         public IEnumerator Ready(string matchId, string token, Action<PublicMatchStateResponse> onSuccess, Action<string> onError)
         {
             string url = $"{baseUrl}/api/matches/{matchId}/ready";

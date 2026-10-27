@@ -1,10 +1,13 @@
 using Back_End.Exceptions;
 using Back_End.Models;
+using Back_End.Rules;
 
 namespace Back_End.Services
 {
     public class PenaltyResult
     {
+        public bool ChallengeSucceeded { get; set; }
+        public string PenalizedPlayerId { get; set; } = string.Empty;
         public bool Survived { get; set; }
         public bool Eliminated { get; set; }
         public string NextPhase { get; set; } = string.Empty;
@@ -12,37 +15,71 @@ namespace Back_End.Services
 
     public class PenaltyService
     {
-        private readonly DeckRoundService _deckRoundService;
+        private readonly DeckRuleEngine _ruleEngine;
 
-        public PenaltyService(DeckRoundService deckRoundService)
+        public PenaltyService(DeckRuleEngine ruleEngine)
         {
-            _deckRoundService = deckRoundService;
+            _ruleEngine = ruleEngine;
         }
 
         /// <summary>
-        /// Executes Russian Roulette penalty on the penalized player.
-        /// Resolves survival/elimination, checks remaining players,
-        /// and either starts a new round or marks match as ended.
+        /// Validates and resolves a challenge and its server-side penalty.
         /// </summary>
-        public PenaltyResult ApplyPenalty(GameMatch match, string penalizedPlayerId)
+        public PenaltyResult ApplyPenalty(GameMatch match, string challengerPlayerId)
         {
-            var player = match.FindPlayer(penalizedPlayerId);
-            if (player == null)
+            if (match.Phase != RoundPhase.AwaitPlayOrChallenge)
             {
-                throw new InvalidOperationException($"Không tìm thấy người chơi bị xử phạt: {penalizedPlayerId}");
+                throw GameRuleException.InvalidPhase("Không thể xử phạt ở phase hiện tại.", match.StateVersion);
             }
 
+            var challenger = match.FindPlayer(challengerPlayerId);
+            if (challenger == null || !challenger.IsAlive || match.CurrentTurnPlayerId != challengerPlayerId)
+            {
+                throw GameRuleException.NotYourTurn(match.StateVersion);
+            }
+
+            var lastPlay = match.LastPlay;
+            if (lastPlay == null || lastPlay.Resolved)
+            {
+                throw GameRuleException.CannotChallenge("Không có lượt đánh hợp lệ để xử phạt.", match.StateVersion);
+            }
+
+            if (lastPlay.PlayerId == challengerPlayerId)
+            {
+                throw GameRuleException.CannotChallenge("Không thể tố cáo lượt đánh của chính mình.", match.StateVersion);
+            }
+
+            var playOwner = match.FindPlayer(lastPlay.PlayerId);
+            if (playOwner == null || !playOwner.IsAlive ||
+                lastPlay.Cards.Count is < 1 or > 3 ||
+                lastPlay.Cards.Count != lastPlay.CardCount ||
+                lastPlay.WasBluff.HasValue)
+            {
+                throw GameRuleException.CannotChallenge("Dữ liệu lượt đánh không hợp lệ để xử phạt.", match.StateVersion);
+            }
+
+            var isBluff = _ruleEngine.IsBluff(lastPlay.Cards, match.TableRank);
+            var penalizedPlayerId = isBluff ? lastPlay.PlayerId : challengerPlayerId;
+            var penalizedPlayer = match.FindPlayer(penalizedPlayerId);
+            if (penalizedPlayer == null || !penalizedPlayer.IsAlive)
+            {
+                throw GameRuleException.CannotChallenge("Người chơi bị xử phạt không còn hợp lệ.", match.StateVersion);
+            }
+
+            penalizedPlayer.Revolver.ValidateState();
+
+            lastPlay.Resolved = true;
+            lastPlay.WasBluff = isBluff;
             match.Phase = RoundPhase.PenaltyResolution;
 
-            // Pull trigger on revolver
-            bool isBulletHit = player.Revolver.PullTrigger();
+            bool isBulletHit = penalizedPlayer.Revolver.PullTrigger();
             bool survived = !isBulletHit;
             bool eliminated = isBulletHit;
 
             if (eliminated)
             {
-                player.IsAlive = false;
-                player.Hand.Clear(); // Clear dead player hand
+                penalizedPlayer.IsAlive = false;
+                penalizedPlayer.Hand.Clear();
             }
 
             // Check alive players
@@ -60,13 +97,14 @@ namespace Back_End.Services
             }
             else
             {
-                // Start next round with living players
-                _deckRoundService.StartRound(match);
-                nextPhase = "RoundStart";
+                // The caller orchestrates the next round after this penalty result is finalized.
+                nextPhase = RoundPhase.PenaltyResolution.ToString();
             }
 
             return new PenaltyResult
             {
+                ChallengeSucceeded = isBluff,
+                PenalizedPlayerId = penalizedPlayerId,
                 Survived = survived,
                 Eliminated = eliminated,
                 NextPhase = nextPhase

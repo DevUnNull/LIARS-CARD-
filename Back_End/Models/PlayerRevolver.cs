@@ -30,6 +30,8 @@ namespace Back_End.Models
         /// </summary>
         public bool PullTrigger()
         {
+            ValidateState();
+
             PullsCount++;
             if (CurrentChamber == BulletChamber)
             {
@@ -38,6 +40,16 @@ namespace Back_End.Models
 
             CurrentChamber = (CurrentChamber + 1) % MaxChambers;
             return false;
+        }
+
+        public void ValidateState()
+        {
+            if (BulletChamber < 0 || BulletChamber >= MaxChambers ||
+                CurrentChamber < 0 || CurrentChamber >= MaxChambers ||
+                PullsCount < 0)
+            {
+                throw new InvalidOperationException("Trạng thái ổ quay không hợp lệ.");
+            }
         }
     }
 }

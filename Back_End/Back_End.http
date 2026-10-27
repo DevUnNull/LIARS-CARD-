@@ -1,6 +1,19 @@
 @Back_End_HostAddress = http://localhost:5280
+@matchId = match_example
+@unknownMatchId = unknown_match
+@accessToken = replace-with-participant-access-token
 
 GET {{Back_End_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+### Get a persisted match result (requires a participant JWT)
+GET {{Back_End_HostAddress}}/api/matches/{{matchId}}/result
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### A match without a persisted result returns 404
+GET {{Back_End_HostAddress}}/api/matches/{{unknownMatchId}}/result
+Authorization: Bearer {{accessToken}}
+Accept: application/json

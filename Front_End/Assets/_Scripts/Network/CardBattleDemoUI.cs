@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace LiarsCard.Network
@@ -21,6 +22,9 @@ namespace LiarsCard.Network
         public string currentTurnPlayerId = "-";
         public int stateVersion = 1;
         public string lastPlayId = "";
+        public string matchPhase = "-";
+        public string winnerPlayerId = "";
+        public bool localPlayerAlive;
 
         [Header("Local Player Hand")]
         public List<CardDto> myCards = new List<CardDto>();
@@ -28,6 +32,23 @@ namespace LiarsCard.Network
 
         private string statusLog = "San sang. Hay ngoi vao ban, ready hoac nhap Match ID.";
         private float pollTimer = 0f;
+        private string currentPlayerId = "";
+        private string appliedStateMatchId = "";
+        private bool hasAuthoritativeMatchState;
+        private readonly HashSet<string> displayedRoundKeys = new HashSet<string>();
+        private readonly HashSet<string> displayedEliminationKeys = new HashSet<string>();
+        private readonly HashSet<string> displayedMatchEndKeys = new HashSet<string>();
+        private MatchResultResponse savedMatchResult;
+        private string savedResultMatchId = "";
+        private string savedResultStatus = "NotLoaded";
+        private string savedResultError = "";
+
+        private bool CanSendGameplayAction =>
+            hasAuthoritativeMatchState &&
+            string.Equals(appliedStateMatchId, matchId, StringComparison.Ordinal) &&
+            localPlayerAlive &&
+            !string.Equals(matchPhase, "MatchEnded", StringComparison.Ordinal) &&
+            string.Equals(currentTurnPlayerId, currentPlayerId, StringComparison.Ordinal);
 
         private void Start()
         {
@@ -120,7 +141,6 @@ namespace LiarsCard.Network
                 {
                     ApplyState(res);
                     statusLog = $"[READY THANH CONG] Round: {res.roundNumber} | Table Rank: {res.tableRank} | Luot: {res.currentTurnPlayerId}";
-                    ActionGetHand();
                 },
                 onError: err => statusLog = $"Loi Ready: {err}"
             ));
@@ -128,20 +148,102 @@ namespace LiarsCard.Network
 
         public void ActionGetHand()
         {
-            StartCoroutine(MatchApiClient.Instance.GetHand(matchId, jwtToken,
+            RequestHand(matchId, roundNumber, announceResult: true);
+        }
+
+        public void ActionLoadSavedResult()
+        {
+            savedResultMatchId = matchId;
+            if (string.IsNullOrWhiteSpace(matchId) || string.IsNullOrEmpty(jwtToken))
+            {
+                savedResultStatus = "Error";
+                savedResultError = "Can Match ID va access token de tai ket qua.";
+                return;
+            }
+
+            if (savedResultStatus == "Loading")
+            {
+                return;
+            }
+            savedMatchResult = null;
+            savedResultStatus = "Loading";
+            savedResultError = "";
+
+            StartCoroutine(MatchApiClient.Instance.GetMatchResult(
+                matchId,
+                jwtToken,
+                onSuccess: result =>
+                {
+                    if (!string.Equals(matchId, savedResultMatchId, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+
+                    savedMatchResult = result;
+                    savedResultStatus = "SavedResultLoaded";
+                    savedResultError = "";
+                },
+                onNotFound: error =>
+                {
+                    if (!string.Equals(matchId, savedResultMatchId, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+
+                    savedResultStatus = "NotFound";
+                    savedResultError = error;
+                },
+                onError: error =>
+                {
+                    if (!string.Equals(matchId, savedResultMatchId, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+
+                    savedResultStatus = "Error";
+                    savedResultError = error;
+                }));
+        }
+
+        private void RequestHand(string requestedMatchId, int requestedRoundNumber, bool announceResult)
+        {
+            StartCoroutine(MatchApiClient.Instance.GetHand(requestedMatchId, jwtToken,
                 onSuccess: res =>
                 {
+                    if (!string.Equals(matchId, requestedMatchId, StringComparison.Ordinal) ||
+                        (hasAuthoritativeMatchState &&
+                         (roundNumber != requestedRoundNumber ||
+                          string.Equals(matchPhase, "MatchEnded", StringComparison.Ordinal))))
+                    {
+                        return;
+                    }
+
                     myCards = res.cards;
                     selectedCards.Clear();
                     for (int i = 0; i < myCards.Count; i++) selectedCards.Add(false);
-                    statusLog = $"Da nhan {myCards.Count} la bai bi mat tu server.";
+                    if (announceResult)
+                    {
+                        statusLog = $"Da nhan {myCards.Count} la bai bi mat tu server.";
+                    }
                 },
-                onError: err => statusLog = $"Loi lay bai: {err}"
+                onError: err =>
+                {
+                    if (announceResult)
+                    {
+                        statusLog = $"Loi lay bai: {err}";
+                    }
+                }
             ));
         }
 
         public void ActionPlayCards()
         {
+            if (!CanSendGameplayAction)
+            {
+                statusLog = "Khong the danh bai: ban da bi loai, tran da ket thuc, hoac khong phai luot cua ban.";
+                return;
+            }
+
             var chosenCards = new List<string>();
             for (int i = 0; i < myCards.Count; i++)
             {
@@ -166,7 +268,7 @@ namespace LiarsCard.Network
                 onSuccess: res =>
                 {
                     lastPlayId = res.playId;
-                    stateVersion = res.stateVersion;
+                    stateVersion = Math.Max(stateVersion, res.stateVersion);
                     statusLog = $"DANH BAI THANH CONG! PlayId: {res.playId}. Con lai {res.remainingCardCount} la.";
                     ActionGetHand();
                     RefreshState(silent: true);
@@ -177,6 +279,12 @@ namespace LiarsCard.Network
 
         public void ActionChallenge()
         {
+            if (!CanSendGameplayAction)
+            {
+                statusLog = "Khong the to cao: ban da bi loai, tran da ket thuc, hoac khong phai luot cua ban.";
+                return;
+            }
+
             if (string.IsNullOrEmpty(lastPlayId))
             {
                 statusLog = "Chua co luot danh nao de to cao!";
@@ -194,11 +302,10 @@ namespace LiarsCard.Network
             StartCoroutine(MatchApiClient.Instance.Challenge(matchId, jwtToken, req,
                 onSuccess: res =>
                 {
-                    stateVersion = res.stateVersion;
+                    stateVersion = Math.Max(stateVersion, res.stateVersion);
                     string outcome = res.challengeSucceeded ? "TO CAO DUNG! (Co nguoi noi doi)" : "TO CAO SAI! (Bai hoan toan hop le)";
                     string penalty = res.eliminated ? "BI LOAI (RUT SUNG TRUNG DAN)" : (res.survived ? "MAY MAN SONG SOT (PHEW)" : "DAN BAN KHONG TRUNG");
                     statusLog = $"KET QUA TO CAO: {outcome}\nNguoi bi phat: {res.penalizedPlayerId} -> {penalty}\nGiai doan tiep theo: {res.nextPhase}";
-                    ActionGetHand();
                     RefreshState(silent: true);
                 },
                 onError: err => statusLog = $"Loi to cao: {err}"
@@ -215,11 +322,107 @@ namespace LiarsCard.Network
 
         private void ApplyState(PublicMatchStateResponse res)
         {
+            if (res == null ||
+                string.IsNullOrWhiteSpace(res.matchId) ||
+                !string.Equals(res.matchId, matchId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            bool hadStateForMatch = hasAuthoritativeMatchState &&
+                string.Equals(appliedStateMatchId, res.matchId, StringComparison.Ordinal);
+            int previousRoundNumber = roundNumber;
+
+            if (!string.Equals(appliedStateMatchId, res.matchId, StringComparison.Ordinal))
+            {
+                appliedStateMatchId = res.matchId;
+                stateVersion = -1;
+                hasAuthoritativeMatchState = false;
+                localPlayerAlive = false;
+                winnerPlayerId = "";
+                lastPlayId = "";
+                roundNumber = 0;
+                myCards.Clear();
+                selectedCards.Clear();
+                displayedRoundKeys.Clear();
+                displayedEliminationKeys.Clear();
+                displayedMatchEndKeys.Clear();
+                savedMatchResult = null;
+                savedResultMatchId = "";
+                savedResultStatus = "NotLoaded";
+                savedResultError = "";
+            }
+
+            if (res.stateVersion < stateVersion)
+            {
+                return;
+            }
+
             roundNumber = res.roundNumber;
             tableRank = res.tableRank;
-            currentTurnPlayerId = res.currentTurnPlayerId;
+            currentTurnPlayerId = string.IsNullOrEmpty(res.currentTurnPlayerId) ? "-" : res.currentTurnPlayerId;
             stateVersion = res.stateVersion;
-            if (res.lastPlay != null) lastPlayId = res.lastPlay.playId;
+            matchPhase = res.phase ?? "-";
+            winnerPlayerId = res.winnerPlayerId ?? "";
+            currentPlayerId = res.currentPlayerId ?? "";
+            hasAuthoritativeMatchState = true;
+
+            if (res.lastPlay != null)
+            {
+                lastPlayId = res.lastPlay.playId;
+            }
+            else
+            {
+                lastPlayId = "";
+            }
+
+            var players = res.players ?? new List<PublicPlayerStateDto>();
+            var localPlayer = players.FirstOrDefault(player =>
+                string.Equals(player.playerId, currentPlayerId, StringComparison.Ordinal));
+            localPlayerAlive = localPlayer != null && localPlayer.isAlive;
+
+            bool newRoundSnapshot = roundNumber > 0 &&
+                (!hadStateForMatch || previousRoundNumber != roundNumber);
+            if (newRoundSnapshot)
+            {
+                string roundKey = $"{res.matchId}:{roundNumber}";
+                if (displayedRoundKeys.Add(roundKey))
+                {
+                    statusLog = hadStateForMatch
+                        ? $"Da dong bo vong moi {roundNumber} tu trang thai authoritative cua Server."
+                        : $"Da khoi phuc trang thai vong {roundNumber} tu Server.";
+                }
+
+                if (localPlayerAlive && !string.Equals(matchPhase, "MatchEnded", StringComparison.Ordinal))
+                {
+                    RequestHand(res.matchId, roundNumber, announceResult: false);
+                }
+            }
+
+            foreach (var eliminatedPlayer in players.Where(player => !player.isAlive))
+            {
+                string eventKey = $"{res.matchId}:{eliminatedPlayer.playerId}";
+                if (displayedEliminationKeys.Add(eventKey))
+                {
+                    statusLog = $"Nguoi choi {eliminatedPlayer.playerId} da bi loai theo trang thai Server.";
+                }
+            }
+
+            if (string.Equals(matchPhase, "MatchEnded", StringComparison.Ordinal))
+            {
+                string eventKey = $"{res.matchId}:{res.stateVersion}";
+                if (displayedMatchEndKeys.Add(eventKey))
+                {
+                    statusLog = string.IsNullOrEmpty(winnerPlayerId)
+                        ? "TRAN DA KET THUC. Server khong ghi nhan nguoi chien thang."
+                        : $"TRAN DA KET THUC. Nguoi chien thang: {winnerPlayerId}.";
+                }
+
+                if (!string.Equals(savedResultMatchId, res.matchId, StringComparison.Ordinal))
+                {
+                    ActionLoadSavedResult();
+                }
+            }
         }
 
         private void OnGUI()
@@ -273,6 +476,57 @@ namespace LiarsCard.Network
             GUILayout.Label("<b>2. TRANG THAI BAN (TABLE STATE)</b>");
             GUILayout.Label($"Vong: <b>{roundNumber}</b> | Rank Ban: <color=yellow><b>{tableRank}</b></color> | State Version: <b>{stateVersion}</b>");
             GUILayout.Label($"Luot danh hien tai: <b>{currentTurnPlayerId}</b>");
+            GUILayout.Label($"Trang thai tran: <b>{matchPhase}</b>");
+            if (hasAuthoritativeMatchState)
+            {
+                GUILayout.Label(localPlayerAlive
+                    ? "<color=green>Ban con song</color>"
+                    : "<color=red>Ban da bi loai hoac khong thuoc tran</color>");
+            }
+
+            if (string.Equals(matchPhase, "MatchEnded", StringComparison.Ordinal))
+            {
+                GUILayout.Label(string.IsNullOrEmpty(winnerPlayerId)
+                    ? "<size=16><b>TRAN DA KET THUC - KHONG CO WINNER DUOC SERVER GHI NHAN</b></size>"
+                    : $"<size=16><b>TRAN DA KET THUC - WINNER: {winnerPlayerId}</b></size>");
+                GUILayout.Label("<b>Ket qua gameplay authoritative khong xac nhan MongoDB da luu.</b>");
+                GUILayout.Label($"Trang thai ket qua luu: <b>{savedResultStatus}</b>");
+
+                if (savedResultStatus == "Loading")
+                {
+                    GUILayout.Label("Dang tai ket qua da luu...");
+                }
+                else if (savedResultStatus == "Error" || savedResultStatus == "NotFound")
+                {
+                    GUILayout.Label(savedResultStatus == "NotFound"
+                        ? "Chua tim thay ket qua da luu."
+                        : $"Loi tai ket qua: {savedResultError}");
+                    if (GUILayout.Button("Thu lai tai ket qua"))
+                    {
+                        ActionLoadSavedResult();
+                    }
+                }
+                else if (savedResultStatus == "SavedResultLoaded" &&
+                         savedMatchResult != null &&
+                         string.Equals(savedMatchResult.matchId, matchId, StringComparison.Ordinal))
+                {
+                    GUILayout.Label(string.IsNullOrEmpty(savedMatchResult.winnerPlayerId)
+                        ? "Ket qua da luu: khong co winner."
+                        : $"Winner trong ket qua da luu: {savedMatchResult.winnerPlayerId}");
+
+                    foreach (var resultPlayer in savedMatchResult.players)
+                    {
+                        GUILayout.Label(
+                            $"{resultPlayer.displayName} ({resultPlayer.playerId}) - " +
+                            $"{(resultPlayer.isAliveAtEnd ? "con song" : "bi loai")}, " +
+                            $"{resultPlayer.remainingCardCountAtEnd} la" +
+                            (resultPlayer.isWinner ? ", WINNER" : ""));
+                    }
+
+                    GUILayout.Label($"Ket thuc: {savedMatchResult.endedAtUtc}");
+                }
+            }
+
             if (!string.IsNullOrEmpty(lastPlayId))
             {
                 GUILayout.Label($"Luot danh gan nhat: <color=cyan>{lastPlayId}</color>");
@@ -280,6 +534,7 @@ namespace LiarsCard.Network
 
             GUILayout.Space(6);
             GUILayout.Label("<b>3. BAI TREN TAY (CHON 1-3 LA DE DANH / BLUFF)</b>");
+            GUI.enabled = CanSendGameplayAction;
             if (myCards.Count == 0)
             {
                 GUILayout.Label("<i>(Chua co bai, nhan 'Ready' hoac 'Lay Bai' de chia bai)</i>");
@@ -306,6 +561,7 @@ namespace LiarsCard.Network
             if (GUILayout.Button("TO CAO (CHALLENGE / LIAR)", GUILayout.Height(32))) ActionChallenge();
             GUI.color = Color.white;
             GUILayout.EndHorizontal();
+            GUI.enabled = true;
 
             GUILayout.Space(6);
             GUILayout.Label("<b>4. NHAT KY VAN BAI (LOG):</b>");

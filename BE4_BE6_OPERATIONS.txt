@@ -1,0 +1,300 @@
+LIAR'S CARD - TONG KET BE4-01..BE4-05 VA HUONG DAN BE6-03..BE6-05
+Ngay tong hop: 2026-10-28
+
+MUC DICH VA TRANG THAI
+======================
+Tai lieu nay tom tat luong backend/frontend BE4 hien co va de xuat cach van hanh,
+thiet ke, trien khai tiep theo cho BE6-03 (Lich su dau), BE6-04 (Thong ke nguoi
+choi), BE6-05 (Bang xep hang).
+
+BE4-01..BE4-05 da co code trong worktree va cac dot test/build da chay thanh cong
+theo cac bao cao truoc. Cac thay doi hien van chua commit. Unity dung REST polling;
+Unity chua co SignalR client de nhan truc tiep cac gameplay/penalty event.
+Unity build chua duoc xac minh do Unity Editor dang mo.
+
+BE6-03..BE6-05 CHUA duoc trien khai trong task nay. Tieu chi bang xep hang va
+mot so quy uoc thong ke can duoc nhom nghiep vu thong qua truoc khi code.
+
+
+PHAN I - CAC LUONG BE4 DA CO
+============================
+
+BE4-01 - XAC DINH VA TINH HINH PHAT (PENALTY)
+---------------------------------------------
+Muc dich:
+- Backend la nguon quyet dinh dung/sai cua challenge, nguoi bi phat, ket qua
+  revolver, song/chet.
+- Unity khong gui ket qua penalty hoac trang thai song/chet de server tin theo.
+
+Luong hoat dong:
+1. Client gui challenge kem matchId, actionId, expectedVersion, targetPlayId.
+2. DeckAction/Challenge flow xac thuc player tu JWT va kiem tra thanh vien tran,
+   phase, luot, phien ban, play con hop le.
+3. PenaltyService kiem tra du lieu last play va tinh bluff qua DeckRuleEngine.
+4. PenaltyService chon nguoi bi phat theo ket qua challenge, kiem tra revolver va
+   server tu pull trigger.
+5. Neu hit, backend danh dau player IsAlive=false va xoa hand; neu khong hit,
+   player song. Client chi nhan ket qua can cho UI.
+6. Backend dem AlivePlayers tu GameMatch. Khi con toi da mot nguoi, dat phase
+   MatchEnded, winner la nguoi song duy nhat hoac null neu khong co ai.
+
+Quy tac an toan:
+- Khong gui vi tri dan/buồng dan noi bo hoac logic an toan cua revolver xuong client.
+- Khong nhan winner/IsAlive do client khai bao.
+- Request trung duoc xu ly bang actionId + payload hash trong MatchStore.
+
+BE4-02 - ACK/THOI HAN ANIMATION PENALTY
+---------------------------------------
+Muc dich:
+- SignalR phat penalty animation start den nhom match.
+- Client ACK chi khi animation chinh da hien thi xong.
+- ACK khong thay doi penalty result, alive state, winner, round hay phase gameplay.
+
+Luong hoat dong:
+1. ChallengeService tao PenaltyEventId va PenaltyAnimationSession.
+2. Session ghi danh sach player can ACK (roster cua tran), trang thai Pending,
+   thoi han server va so ACK.
+3. Server phat PenaltyAnimationStarted qua SignalR hub.
+4. Hub lay player identity tu ket noi da xac thuc; khong dung playerId tu payload.
+5. ACK hop le duoc ghi trong session. ACK du, hoac timeout server (mac dinh 30
+   giay, co the chinh qua PenaltyAnimation.AckTimeoutSeconds), se ket thuc session.
+6. ACK duplicate, sai event, outsider hoac ACK sau terminal khong lap side effect.
+7. Hosted timeout worker quet session pending; reconnect snapshot co the cung cap
+   session dang pending va terminal gan nhat cho client.
+
+Luu y:
+- Session ACK va MatchStore dang o RAM, khong persistence qua server restart.
+- Unity chua tich hop SignalR client; gameplay UI tiep tuc dong bo qua REST.
+
+BE4-03 - ELIMINATE PLAYER & DETERMINE WINNER
+--------------------------------------------
+Muc dich:
+- Ket qua penalty cap nhat trang thai loai nguoi va ket thuc tran o Backend.
+- Client chi cap nhat UI tu snapshot/event authoritative.
+
+Luong hoat dong:
+1. PenaltyService danh dau IsAlive=false va xoa hand neu player bi eliminate.
+2. Backend dem AlivePlayers tu state match.
+3. Neu con mot nguoi song: MatchEnded va WinnerPlayerId la player do.
+4. Neu khong con ai song: MatchEnded va WinnerPlayerId=null; khong tu tao winner.
+5. ChallengeService luu match/action duoi lock theo match; sau khi lock duoc nha,
+   phat PlayerEliminated va/hoac MatchEnded.
+6. Public state snapshot co Players, Phase, WinnerPlayerId, StateVersion va
+   currentPlayerId cho Unity xac dinh player local.
+7. Unity loc snapshot cu, dedupe UI notices va chan play/challenge local khi player
+   chet, tran ket thuc, khong phai luot hoac chua co state authoritative.
+
+BE4-04 - POST-PENALTY ORCHESTRATION / START NEXT ROUND ONCE
+----------------------------------------------------------
+Muc dich:
+- Sau penalty, chi mot diem duyet state de quyet dinh start round tiep hay ket thuc.
+
+Luong hoat dong:
+1. PenaltyService ket luan penalty/elimination/winner; khong tu goi StartRound.
+2. ChallengeService dang giu lock match, xem phase/winner/AlivePlayers.
+3. Neu tran khong ket thuc, winner null va con hon mot nguoi song, goi
+   DeckRoundService.StartRound dung mot lan.
+4. Save match va action result, sau do nha lock.
+5. Phat RoundStarted sau commit; event co PenaltyEventId, RoundNumber,
+   StateVersion, phase, table rank, current turn.
+6. Action retry dung actionId lay cached result, khong chia lai bai/tao vong moi.
+7. SetReady chi start vong ban dau o WaitingForPlayers; khong mo lai tran
+   MatchEnded. ACK/timeout khong goi StartRound.
+
+Vi tri StartRound:
+- ChallengeService: round moi sau penalty neu tran tiep tuc.
+- MatchService: vong dau khi roster san sang va phase WaitingForPlayers.
+- DeckRoundService: noi thuc thi chia bai/reset vong, khong tu phat event.
+
+BE4-05 - PERSIST & QUERY MATCH RESULTS
+--------------------------------------
+Muc dich:
+- Chi luu snapshot ket qua khi state authoritative da la MatchEnded.
+- MatchStore gameplay van o RAM; MongoDB chi giu ket qua tran da ket thuc.
+
+Schema Mongo:
+- Collection: match_results.
+- Unique index: ux_match_results_match_id tren matchId (string).
+- Document: matchId, winnerPlayerId nullable, players[{playerId, displayName,
+  seatIndex, isAliveAtEnd, isWinner, remainingCardCountAtEnd}],
+  matchCreatedAtUtc, endedAtUtc, finalStateVersion.
+- Khong luu hand, card ID, revolver/bullet, token hoac secret gameplay.
+- GameMatch khong co StartedAt/EndedAt rieng; khong gia lap StartedAt.
+
+Luong luu:
+1. ChallengeService ket thuc gameplay va cache action result trong MatchStore.
+2. Nhả lock, MatchResultService lay snapshot tu state authoritative; service chi
+   chap nhan Phase=MatchEnded.
+3. Insert document vao Mongo; unique matchId chong insert trung.
+4. Neu duplicate key, doc document da co:
+   - Ket qua giong nhau: retry thanh cong, giu nguyen document/timestamp.
+   - Ket qua khac: log conflict co matchId/version, tra loi conflict, khong update.
+5. Chi sau persist thanh cong moi phat MatchEnded va tra response thanh cong.
+6. Neu Mongo loi, tra 503; retry action da cache thu lai persistence, khong chay
+   lai penalty/elimination/StartRound. MatchEnded event co marker trong RAM de
+   tranh phat nghiep vu trung lap trong cung process.
+
+Truy van:
+- GET /api/matches/{matchId}/result.
+- JWT bat buoc. Chi participant co trong result document duoc xem.
+- 200 participant + co document; 404 neu chua co result hoac khong phai participant;
+  401 neu chua xac thuc; loi Mongo tra 503.
+- DTO public khong tra truc tiep Mongo document.
+- Unity goi REST endpoint khi snapshot gameplay bao MatchEnded. UI phan biet
+  MatchEnded voi SavedResultLoaded, hien loading/not found/error/retry.
+
+Van hanh Mongo:
+- Connection/database qua MongoDbContext trong appsettings/environment secrets.
+- Application tao unique index matchId luc startup.
+- Integration test co the chay voi Mongo local; khong nham test database voi
+  database that. Khong drop collection/database san pham.
+
+Gioi han recovery:
+- MatchStore van o RAM. Neu server restart truoc khi state ket thuc duoc ghi
+  Mongo, backend khong co du lieu ben vung de tai tao tran do.
+- Khong co Mongo transaction giua MatchStore va result; khong tuyen bo exactly-once
+  tren ca hai he thong. Unique key va cached retry bao ve cac truong hop retry khi
+  process con state.
+
+
+PHAN II - VAN HANH LUONG GAMEPLAY END-TO-END
+============================================
+
+1. Tao match, roster va ready duoc xu ly boi backend. MatchStore giu GameMatch,
+   player hands va revolver state trong RAM.
+2. Backend chia vong dau, chon table rank/current turn; client doc state qua REST.
+3. Player danh bai qua REST; backend xac thuc danh tinh, validate turn/version,
+   va giu last play trong state.
+4. Player khac challenge. Backend tu tinh bluff, penalty va revolver.
+5. Neu penalty tiep tuc tran: backend start round mot lan, commit state,
+   phat elimination/round event neu can; client resync snapshot va hand qua REST.
+6. Neu penalty ket thuc tran: backend xac dinh winner/null, commit state va action,
+   persist result Mongo, sau do phat MatchEnded.
+7. Penalty animation ACK/timeout co the dien ra doc lap; no khong gate gameplay,
+   khong doi winner va khong tao vong.
+8. Unity hien thi state/result authoritative. UI ket thuc tran khong khang dinh
+   result da duoc luu cho den khi GET result thanh cong.
+
+Xu ly van hanh / kiem tra:
+- Backend: dotnet build Back_End.csproj --no-restore
+- Unit + Mongo integration test:
+  PowerShell: $env:RUN_MATCH_RESULTS_MONGO_INTEGRATION='1';
+              dotnet test Tests/Back_End.Tests.csproj
+- Mongo integration co the dung MATCH_RESULTS_MONGO_URI; test tao database ten
+  ngau nhien va drop dung database do test tao.
+- Unity: mo Front_End trong Unity Editor; chua co bao cao compile thanh cong.
+- Khong commit/push khi chua duoc yeu cau.
+
+
+PHAN III - KE HOACH BE6-03..BE6-05
+==================================
+
+NGUYEN TAC CHUNG
+----------------
+- Nguon du lieu duy nhat: match_results da duoc Backend chot va luu.
+- Khong doc MatchStore de tinh lich su/thong ke/leaderboard, vi MatchStore RAM va
+  chi co tran dang chay.
+- Khong tin client gui winner, score, stats, playerId filter hoac ranking points.
+- Unique matchId bao dam moi tran chi dong gop toi da mot lan vao truy van/tong hop.
+- Chi tra du lieu cong khai can thiet; khong expose hand/revolver/token.
+- Dung cursor pagination va sap xep deterministic thay vi skip/offset khi du lieu lon.
+
+BE6-03 - LICH SU DAU
+--------------------
+Muc tieu:
+Tra danh sach tran da hoan tat ma user hien tai la participant, co phan trang.
+
+API de xuat:
+GET /api/matches/history?limit=20&cursor={opaqueCursor}
+
+Quy tac:
+- playerId lay tu claim JWT, khong nhan playerId tuy y tu client.
+- Query filter players.playerId == current user.
+- Sap xep endedAtUtc giam dan, sau do matchId giam/tang theo mot quy uoc co dinh
+  de tie-break timestamp.
+- Limit mac dinh 20, gioi han toi da de xuat 100.
+- Cursor opaque encode endedAtUtc + matchId; cursor trang tiep theo dung keyset
+  pagination, tranh skip du lieu khi tran moi chen vao.
+- DTO tra matchId, winner, endedAtUtc, thong tin participant can thiet va cursor
+  tiep theo; khong tra secret fields.
+- Khong tim thay tran rieng le co the bo qua; danh sach rong la HTTP 200 voi items=[].
+
+Index Mongo de xuat:
+- Multikey index tren players.playerId va endedAtUtc; them matchId de ho tro sort
+  tie-break neu Mongo query planner chap nhan index pattern.
+- Xac minh explain/query plan voi Mongo version va schema thuc te truoc deploy.
+
+Unity:
+- Them man history/list neu UX duoc duyet; load page, loading/error/empty/retry.
+- Goi endpoint bang access token; khong gui playerId.
+
+BE6-04 - THONG KE NGUOI CHOI
+----------------------------
+Muc tieu:
+Tinh thong ke tu ket qua cuoi Backend, khong cong lap cung mot tran.
+
+API de xuat:
+GET /api/players/me/statistics
+
+Metric co the tinh tu schema hien tai:
+- completedMatchCount: so document co player trong players.
+- winCount: winnerPlayerId == playerId.
+- lossCount: winnerPlayerId != null va winnerPlayerId != playerId.
+- noWinnerCount: winnerPlayerId == null.
+- winRate: can chot mau so truoc khi code.
+
+De xuat nghiep vu can duyet:
+- Tinh tran khong winner la no-contest: van tinh vao completedMatchCount/noWinnerCount,
+  nhung khong tinh vao win/loss denominator.
+- winRate = winCount / (winCount + lossCount); neu mau so = 0, tra null hoac 0
+  theo contract UI duoc nhom chon.
+- Khong dung remaining cards hay so lan penalty lam metric neu chua co yeu cau.
+- Unique matchId trong collection giup aggregation moi tran toi da mot dong.
+- Query aggregate tren match_results; co the tinh on-demand luc dau.
+- Neu luu cache/denormalized stats sau nay, can co quy trinh rebuild tu match_results
+  va idempotency theo matchId; khong cong incremental theo event co the phat lap.
+
+BE6-05 - BANG XEP HANG
+----------------------
+Muc tieu:
+Xep hang nguoi choi theo tieu chi nhom da thong nhat; phan trang va tie-break ro.
+
+Can nhom nghiep vu quyet dinh truoc khi implement:
+1. Metric chinh la so tran thang, win rate, hay diem leaderboard?
+2. Tran no-winner co bi loai khoi mau so khong?
+3. So tran toi thieu de xuat hien tren bang?
+4. Tie-break theo win count, completed matches, hay thoi diem dat thanh tich?
+5. Cung tat ca metric bang nhau thi dong hang (rank=1,1,3) hay sap tiep theo
+   playerId/displayName chi de on dinh thu tu?
+
+Khong tu chon mot trong cac phuong an tren thay cho owner.
+
+Pipeline de xuat sau khi chot quy tac:
+1. Unwind players trong match_results.
+2. Group theo players.playerId, tinh completed/wins/losses/noWinner theo quy tac
+   BE6-04 va tinh metric xep hang duoc duyet.
+3. Sap xep theo metric chinh giam dan, sau do cac tie-break da duyet.
+4. Them playerId lam tie-break cuoi cung de pagination deterministic neu quy tac
+   dong hang yeu cau thu tu on dinh; phan biet thu tu hien thi voi competition rank.
+5. Cursor pagination encode toan bo sort tuple; khong chi cursor theo score neu
+   nhieu nguoi bang diem.
+6. Gioi han page size, response co items va nextCursor.
+
+Cache:
+- Chua can cache trong ban dau neu quy mo nho.
+- Neu can cache, invalidate/recompute tu persisted match result; khong xem event
+  SignalR la nguon chinh va khong cap nhat bang cache theo event khong idempotent.
+
+
+CAC QUYET DINH CAN DUYET TRUOC BE6
+==================================
+1. BE6-04: tran ket thuc khong winner tinh la no-contest hay loss cho tat ca?
+2. BE6-04: win rate mau so va gia tri khi mau so bang 0.
+3. BE6-05: metric chinh, minimum match count, tie-break va rank numbering.
+4. BE6-03: page size toi da va co can hien thi lich su khong winner hay khong
+   (de xuat co, vi day van la tran da hoan tat).
+5. Chot fields public trong lich su/thong ke/bang xep hang va chinh sach displayName.
+
+Sau khi cac quy tac duoc thong qua, BE6 co the tai su dung collection/repository
+match_results hien tai. Khong can thay MatchStore, khong can them Mongo collection
+cho moi endpoint neu aggregation/index tren collection ket qua dap ung tai.

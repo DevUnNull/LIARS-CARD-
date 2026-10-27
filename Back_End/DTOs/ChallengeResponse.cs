@@ -8,5 +8,6 @@ namespace Back_End.DTOs
         public bool Eliminated { get; set; }
         public string NextPhase { get; set; } = string.Empty;
         public int StateVersion { get; set; }
+        public Guid PenaltyEventId { get; set; }
     }
 }

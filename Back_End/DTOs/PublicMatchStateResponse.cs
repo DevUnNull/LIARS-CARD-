@@ -22,6 +22,7 @@ namespace Back_End.DTOs
         public int RoundNumber { get; set; }
         public string TableRank { get; set; } = string.Empty;
         public string? CurrentTurnPlayerId { get; set; }
+        public string? CurrentPlayerId { get; set; }
         public string Phase { get; set; } = string.Empty;
         public int StateVersion { get; set; }
         public List<PublicPlayerStateDto> Players { get; set; } = new();

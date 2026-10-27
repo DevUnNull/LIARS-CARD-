@@ -13,11 +13,16 @@ namespace Back_End.Controllers
     {
         private readonly MatchService _matchService;
         private readonly MatchQueryService _matchQueryService;
+        private readonly IMatchResultService _matchResultService;
 
-        public MatchesController(MatchService matchService, MatchQueryService matchQueryService)
+        public MatchesController(
+            MatchService matchService,
+            MatchQueryService matchQueryService,
+            IMatchResultService matchResultService)
         {
             _matchService = matchService;
             _matchQueryService = matchQueryService;
+            _matchResultService = matchResultService;
         }
 
         private string? GetCurrentPlayerId()
@@ -53,6 +58,7 @@ namespace Back_End.Controllers
 
             var match = _matchService.CreateMatch(request.MatchId, playerIds);
             var state = _matchQueryService.GetPublicState(match.MatchId);
+            state.CurrentPlayerId = currentPlayerId;
             return Ok(state);
         }
 
@@ -80,7 +86,7 @@ namespace Back_End.Controllers
 
             bool isReady = request?.IsReady ?? true;
             await _matchService.SetReadyAsync(matchId, playerId, isReady);
-            var state = _matchQueryService.GetPublicState(matchId);
+            var state = await _matchQueryService.GetPublicStateAsync(matchId, playerId);
             return Ok(state);
         }
 
@@ -90,9 +96,19 @@ namespace Back_End.Controllers
         [HttpGet("{matchId}/state")]
         [ProducesResponseType(typeof(PublicMatchStateResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status404NotFound)]
-        public ActionResult<PublicMatchStateResponse> GetState([FromRoute] string matchId)
+        public async Task<ActionResult<PublicMatchStateResponse>> GetState([FromRoute] string matchId)
         {
-            var state = _matchQueryService.GetPublicState(matchId);
+            var playerId = GetCurrentPlayerId();
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return Unauthorized(new GameErrorResponse
+                {
+                    Code = "UNAUTHORIZED",
+                    Message = "Không xác định được danh tính người chơi."
+                });
+            }
+
+            var state = await _matchQueryService.GetPublicStateAsync(matchId, playerId);
             return Ok(state);
         }
 
@@ -118,6 +134,35 @@ namespace Back_End.Controllers
 
             var hand = _matchQueryService.GetPlayerHand(matchId, playerId);
             return Ok(hand);
+        }
+
+        /// <summary>
+        /// Lấy kết quả đã lưu của trận đấu nếu người gọi là một người tham gia.
+        /// </summary>
+        [HttpGet("{matchId}/result")]
+        [ProducesResponseType(typeof(MatchResultResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status503ServiceUnavailable)]
+        public async Task<ActionResult<MatchResultResponse>> GetResult(
+            [FromRoute] string matchId,
+            CancellationToken cancellationToken)
+        {
+            string? playerId = GetCurrentPlayerId();
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return Unauthorized(new GameErrorResponse
+                {
+                    Code = "UNAUTHORIZED",
+                    Message = "Không xác định được danh tính người chơi."
+                });
+            }
+
+            var result = await _matchResultService.GetForParticipantAsync(
+                matchId,
+                playerId,
+                cancellationToken);
+            return result == null ? NotFound() : Ok(result);
         }
     }
 }

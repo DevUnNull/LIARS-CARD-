@@ -66,7 +66,7 @@ namespace Back_End.Services
                 var alivePlayers = match.AlivePlayers;
                 bool allReady = alivePlayers.Count >= 2 && alivePlayers.All(p => p.IsReady);
 
-                if (allReady && (match.Phase == RoundPhase.WaitingForPlayers || match.Phase == RoundPhase.MatchEnded))
+                if (allReady && match.Phase == RoundPhase.WaitingForPlayers)
                 {
                     _deckRoundService.StartRound(match);
                 }

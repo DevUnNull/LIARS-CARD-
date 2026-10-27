@@ -20,5 +20,11 @@ namespace Back_End.Infrastructure.MatchState
         Task<IDisposable> LockMatchAsync(string matchId);
         ActionResultRecord? GetActionResult(string matchId, Guid actionId);
         void SaveActionResult(string matchId, Guid actionId, string payloadHash, object result, int stateVersion);
+        bool TryCreatePenaltyAnimation(PenaltyAnimationSession session);
+        PenaltyAnimationSession? GetPenaltyAnimation(string matchId, Guid penaltyEventId);
+        IReadOnlyList<PenaltyAnimationSession> GetPenaltyAnimations(string matchId);
+        IReadOnlyList<(string MatchId, Guid PenaltyEventId)> GetPendingPenaltyAnimationIds();
+        void SavePenaltyAnimation(PenaltyAnimationSession session);
+        bool TryMarkMatchEndedEventPublished(string matchId, int stateVersion);
     }
 }
