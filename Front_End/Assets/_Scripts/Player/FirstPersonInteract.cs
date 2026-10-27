@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Networking;
@@ -36,6 +36,12 @@ public class FirstPersonInteract : MonoBehaviour
 
         Item itemObj = RaycastSource.Instance.currentObject.GetComponent<Item>();
         itemObj.OnInteract();
+    }
+
+    public void LeaveSeat()
+    {
+        if (isLeavingSeat) return;
+        StartCoroutine(SendLeaveSeatRequest());
     }
 
     private void OnESCWasPressed(InputAction.CallbackContext context)
@@ -84,6 +90,11 @@ public class FirstPersonInteract : MonoBehaviour
 
                 Debug.Log("Leave sit.");
                 PlayerController.Instance.firstPersonMovement.enabled = true;
+
+                if (TableSessionManager.Instance != null)
+                {
+                    TableSessionManager.Instance.OnLeaveSeatSuccess();
+                }
             }
         }
         finally

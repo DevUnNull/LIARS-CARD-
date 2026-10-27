@@ -21,6 +21,7 @@ namespace LiarsCard.Network
         private void Awake()
         {
             if (Instance == null) Instance = this;
+            if (AuthApiClient.Instance != null && !string.IsNullOrEmpty(AuthApiClient.Instance.baseUrl)) baseUrl = AuthApiClient.Instance.baseUrl;
             else Destroy(gameObject);
         }
 

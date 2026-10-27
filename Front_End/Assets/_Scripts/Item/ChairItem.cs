@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Text;
 using UnityEngine;
@@ -78,6 +78,11 @@ public class ChairItem : Item
                 controller.enabled = true;
 
                 player.firstPersonMovement.enabled = false;
+
+                if (TableSessionManager.Instance != null)
+                {
+                    TableSessionManager.Instance.OnSitDownSuccess(tableID, sitIndex);
+                }
             }
         }
         finally

@@ -605,6 +605,104 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChairItem
   sitIndex: 3
   tableID: 1
+--- !u!1 &348310573
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 348310578}
+  - component: {fileID: 348310577}
+  - component: {fileID: 348310576}
+  - component: {fileID: 348310575}
+  - component: {fileID: 348310574}
+  m_Layer: 0
+  m_Name: '[Gameplay_Managers]'
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &348310574
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 348310573}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 361ddce1ccae5f14d8efcba7fe46b5b5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CardBattleUI
+  enableOnGUI: 1
+  matchId: 
+  roundNumber: 0
+  tableRank: '-'
+  currentTurnPlayerId: '-'
+  stateVersion: 1
+  lastPlay:
+    playId: 
+    playerId: 
+    cardCount: 0
+  winnerPlayerId: 
+  myCards: []
+  selectedCards: 
+--- !u!114 &348310575
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 348310573}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cfae80280b3183e49a9a26b8925e2a45, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TableLobbyUI
+  enableOnGUI: 1
+--- !u!114 &348310576
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 348310573}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7f8fb8307e0264246b336e9dbae82cf9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TableSessionManager
+--- !u!114 &348310577
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 348310573}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a7eca256c9838f0428b5f1d5148c7ef2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LiarsCard.Network.MatchApiClient
+  baseUrl: http://localhost:5000
+--- !u!4 &348310578
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 348310573}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -1746,6 +1844,51 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RemotePlayerManager
   remotePlayerPrefab: {fileID: 1380949765185175948, guid: 07884b81e51245140ab89b5e78b6e0e0, type: 3}
+--- !u!1 &2126343547
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2126343549}
+  - component: {fileID: 2126343548}
+  m_Layer: 0
+  m_Name: AuthApiClient_Fallback
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2126343548
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2126343547}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0cf1d6f92d9d7348a13b2823c05b0be, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AuthApiClient
+  baseUrl: http://localhost:5000
+--- !u!4 &2126343549
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2126343547}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1765,3 +1908,5 @@ SceneRoots:
   - {fileID: 1664752437}
   - {fileID: 896959437}
   - {fileID: 1230844955}
+  - {fileID: 348310578}
+  - {fileID: 2126343549}
