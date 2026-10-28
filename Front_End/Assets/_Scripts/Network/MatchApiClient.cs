@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Text;
 using UnityEngine;
@@ -16,13 +16,19 @@ namespace LiarsCard.Network
         public static MatchApiClient Instance { get; private set; }
 
         [Header("Backend Settings")]
-        public string baseUrl = "http://localhost:5000"; // Hoac https://localhost:7189
+        public string baseUrl = "http://localhost:5000"; // Hoặc https://localhost:7189
 
         private void Awake()
         {
             if (Instance == null) Instance = this;
-            if (AuthApiClient.Instance != null && !string.IsNullOrEmpty(AuthApiClient.Instance.baseUrl)) baseUrl = AuthApiClient.Instance.baseUrl;
-            else Destroy(gameObject);
+            if (AuthApiClient.Instance != null && !string.IsNullOrEmpty(AuthApiClient.Instance.baseUrl))
+            {
+                baseUrl = AuthApiClient.Instance.baseUrl;
+            }
+            else if (Instance != this)
+            {
+                Destroy(gameObject);
+            }
         }
 
         public IEnumerator GetHand(string matchId, string token, Action<PlayerHandResponse> onSuccess, Action<string> onError)
@@ -136,6 +142,33 @@ namespace LiarsCard.Network
                 if (req.result == UnityWebRequest.Result.Success)
                 {
                     var res = JsonUtility.FromJson<ChallengeResponse>(req.downloadHandler.text);
+                    onSuccess?.Invoke(res);
+                }
+                else
+                {
+                    onError?.Invoke(ExtractError(req));
+                }
+            }
+        }
+
+        public IEnumerator PullTrigger(string matchId, string token, PullTriggerRequest request, Action<PullTriggerResponse> onSuccess, Action<string> onError)
+        {
+            string url = $"{baseUrl}/api/matches/{matchId}/deck/pull-trigger";
+            string json = JsonUtility.ToJson(request);
+
+            using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
+            {
+                byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+                req.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                req.downloadHandler = new DownloadHandlerBuffer();
+                req.SetRequestHeader("Content-Type", "application/json");
+                SetupRequest(req, token);
+
+                yield return req.SendWebRequest();
+
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    var res = JsonUtility.FromJson<PullTriggerResponse>(req.downloadHandler.text);
                     onSuccess?.Invoke(res);
                 }
                 else
@@ -261,7 +294,7 @@ namespace LiarsCard.Network
                 }
             }
             catch { }
-            return req.error ?? "Lá»—i máº¡ng khÃ´ng xÃ¡c Ä‘á»‹nh";
+            return req.error ?? "Lỗi mạng không xác định";
         }
     }
 }

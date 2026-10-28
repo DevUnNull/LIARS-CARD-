@@ -31,5 +31,8 @@ namespace Back_End.DTOs
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? WinnerPlayerId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? PenalizedPlayerId { get; set; }
     }
 }

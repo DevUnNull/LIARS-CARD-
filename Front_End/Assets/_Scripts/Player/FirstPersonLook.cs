@@ -36,6 +36,9 @@ public class FirstPersonLook : MonoBehaviour
 
     void Update()
     {
+        // Khi chuột đang mở khóa (đang tương tác UI Canvas bàn chơi / lobby) -> không xoay camera theo chuột
+        if (Cursor.lockState != CursorLockMode.Locked) return;
+
         Vector2 mouseDelta = HandleInput();
         RotateCamera(mouseDelta);
     }

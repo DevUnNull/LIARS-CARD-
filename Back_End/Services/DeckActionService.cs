@@ -13,15 +13,18 @@ namespace Back_End.Services
         private readonly IMatchStore _matchStore;
         private readonly DeckRuleEngine _ruleEngine;
         private readonly TurnStateMachine _turnStateMachine;
+        private readonly GameBroadcastService? _gameBroadcastService;
 
         public DeckActionService(
             IMatchStore matchStore,
             DeckRuleEngine ruleEngine,
-            TurnStateMachine turnStateMachine)
+            TurnStateMachine turnStateMachine,
+            GameBroadcastService? gameBroadcastService = null)
         {
             _matchStore = matchStore;
             _ruleEngine = ruleEngine;
             _turnStateMachine = turnStateMachine;
+            _gameBroadcastService = gameBroadcastService;
         }
 
         public async Task<PlayCardsResponse> PlayCardsAsync(string matchId, string playerId, PlayCardsRequest request)
@@ -90,6 +93,16 @@ namespace Back_End.Services
 
                 // Increment state version
                 match.StateVersion++;
+
+                // Broadcast âm thanh đánh bài 3D tương ứng với số lượng lá bài vừa đánh ra
+                string cardSfx = playedCards.Count switch
+                {
+                    1 => "Danh_1",
+                    2 => "Danh_2",
+                    3 => "Dnah_3",
+                    _ => "Danh_1"
+                };
+                _gameBroadcastService?.BroadcastAudio(match, cardSfx, playerId);
 
                 var response = new PlayCardsResponse
                 {

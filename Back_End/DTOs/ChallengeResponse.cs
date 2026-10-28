@@ -7,6 +7,7 @@ namespace Back_End.DTOs
         public bool Survived { get; set; }
         public bool Eliminated { get; set; }
         public string NextPhase { get; set; } = string.Empty;
+        public bool AwaitingTriggerPull { get; set; } = true;
         public int StateVersion { get; set; }
     }
 }

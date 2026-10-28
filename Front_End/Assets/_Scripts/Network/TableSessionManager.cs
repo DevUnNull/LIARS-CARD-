@@ -9,6 +9,7 @@ public class TableSessionManager : Singleton<TableSessionManager>
     public int currentTableId { get; private set; }
     public int currentSeatIndex { get; private set; }
     public bool isSeated { get; private set; }
+    public bool isInCardBattle { get; set; }
     public string currentMatchId { get; private set; }
     public TableResponseDto currentTableState { get; private set; }
 
@@ -63,6 +64,7 @@ public class TableSessionManager : Singleton<TableSessionManager>
     public void OnSitDownSuccess(int tableId, int seatIndex)
     {
         isSeated = true;
+        isInCardBattle = false;
         currentTableId = tableId;
         currentSeatIndex = seatIndex;
         currentMatchId = null;
@@ -78,9 +80,17 @@ public class TableSessionManager : Singleton<TableSessionManager>
         RefreshTableNow();
     }
 
+    public void OnMatchEnded()
+    {
+        isInCardBattle = false;
+        currentMatchId = null;
+        RefreshTableNow();
+    }
+
     public void OnLeaveSeatSuccess()
     {
         isSeated = false;
+        isInCardBattle = false;
         currentTableId = 0;
         currentSeatIndex = -1;
         currentMatchId = null;
@@ -114,11 +124,25 @@ public class TableSessionManager : Singleton<TableSessionManager>
                 // Kiem tra xem ban da bat dau vao van bai chua (status == 1: Playing)
                 if (res.status == 1 && !string.IsNullOrEmpty(res.currentMatchId))
                 {
+                    isInCardBattle = true;
                     if (currentMatchId != res.currentMatchId)
                     {
                         currentMatchId = res.currentMatchId;
                         Debug.Log($"<color=green>[TableSessionManager] Tran dau da bat dau! Match ID: {currentMatchId}</color>");
                         OnMatchStarted?.Invoke(currentMatchId);
+                    }
+                }
+                else if (res.status == 0)
+                {
+                    // Chi xoa currentMatchId khi CardBattleUI khong con trong tran
+                    if (CardBattleUI.Instance == null || !CardBattleUI.Instance.IsInBattle)
+                    {
+                        if (!string.IsNullOrEmpty(currentMatchId))
+                        {
+                            currentMatchId = null;
+                            isInCardBattle = false;
+                            Debug.Log("<color=yellow>[TableSessionManager] Tran dau da ket thuc. Quay ve phong cho ban!</color>");
+                        }
                     }
                 }
             },

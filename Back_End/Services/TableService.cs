@@ -177,11 +177,6 @@ namespace Back_End.Services
                         continue;
                     }
 
-                    if (tables[i].Status != TableStatus.Waiting)
-                    {
-                        return "TABLE_NOT_WAITING";
-                    }
-
                     seat.PlayerId = null;
                     seat.IsReady = false;
 
@@ -189,6 +184,14 @@ namespace Back_End.Services
                     {
                         var nextSeated = tables[i].Seats.FirstOrDefault(s => !string.IsNullOrEmpty(s.PlayerId));
                         tables[i].HostPlayerId = nextSeated?.PlayerId;
+                    }
+
+                    // Neu tat ca cac ghe deu trong, reset ban ve Waiting va xoa match
+                    if (tables[i].Seats.All(s => string.IsNullOrEmpty(s.PlayerId)))
+                    {
+                        tables[i].Status = TableStatus.Waiting;
+                        tables[i].CurrentMatchId = null;
+                        tables[i].HostPlayerId = null;
                     }
 
                     return null;
@@ -297,6 +300,23 @@ namespace Back_End.Services
             lock (tableLock)
             {
                 var table = tables.Find(t => t.Id == tableId);
+                if (table != null)
+                {
+                    table.CurrentMatchId = null;
+                    table.Status = TableStatus.Waiting;
+                    foreach (var seat in table.Seats)
+                    {
+                        seat.IsReady = false;
+                    }
+                }
+            }
+        }
+
+        public void EndMatchByMatchId(string matchId)
+        {
+            lock (tableLock)
+            {
+                var table = tables.Find(t => t.CurrentMatchId == matchId);
                 if (table != null)
                 {
                     table.CurrentMatchId = null;

@@ -30,6 +30,7 @@ namespace Back_End.Services
                 Phase = match.Phase.ToString(),
                 StateVersion = match.StateVersion,
                 WinnerPlayerId = match.WinnerPlayerId,
+                PenalizedPlayerId = match.PenalizedPlayerId,
                 Players = match.Players.Select(p => new PublicPlayerStateDto
                 {
                     PlayerId = p.PlayerId,

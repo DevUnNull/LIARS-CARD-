@@ -3,6 +3,7 @@ using System.Text;
 using Back_End.DTOs;
 using Back_End.Exceptions;
 using Back_End.Infrastructure.MatchState;
+using Back_End.Models;
 using Back_End.Rules;
 
 namespace Back_End.Services
@@ -12,15 +13,21 @@ namespace Back_End.Services
         private readonly IMatchStore _matchStore;
         private readonly DeckRuleEngine _ruleEngine;
         private readonly PenaltyService _penaltyService;
+        private readonly TableService? _tableService;
+        private readonly GameBroadcastService? _gameBroadcastService;
 
         public ChallengeService(
             IMatchStore matchStore,
             DeckRuleEngine ruleEngine,
-            PenaltyService penaltyService)
+            PenaltyService penaltyService,
+            TableService? tableService = null,
+            GameBroadcastService? gameBroadcastService = null)
         {
             _matchStore = matchStore;
             _ruleEngine = ruleEngine;
             _penaltyService = penaltyService;
+            _tableService = tableService;
+            _gameBroadcastService = gameBroadcastService;
         }
 
         public async Task<ChallengeResponse> ChallengeAsync(string matchId, string playerId, ChallengeRequest request)
@@ -75,7 +82,7 @@ namespace Back_End.Services
 
                 if (isBluff)
                 {
-                    // Challenger was right -> player who played cards is penalized
+                    // Challenger was right -> player who bluffed is penalized
                     challengeSucceeded = true;
                     penalizedPlayerId = lastPlay.PlayerId;
                 }
@@ -86,16 +93,26 @@ namespace Back_End.Services
                     penalizedPlayerId = playerId;
                 }
 
-                // Apply Russian Roulette penalty
-                var penaltyResult = _penaltyService.ApplyPenalty(match, penalizedPlayerId);
+                // Chuyen match sang trang thai PenaltyResolution de cho nguoi thua chu dong bop co (Russian Roulette)
+                match.Phase = RoundPhase.PenaltyResolution;
+                match.PenalizedPlayerId = penalizedPlayerId;
+                match.CurrentTurnPlayerId = penalizedPlayerId;
+                match.StateVersion++;
+
+                // Broadcast âm thanh Tố ("To") đồng bộ qua mạng tại vị trí người tố
+                _gameBroadcastService?.BroadcastAudio(match, "To", playerId);
+
+                // Broadcast sự kiện phạt tới tất cả Client trong phòng (kích hoạt UI bóp cò cho loser, spectating cho người khác)
+                _gameBroadcastService?.BroadcastPenaltyWaitingForTrigger(match, penalizedPlayerId, playerId, challengeSucceeded);
 
                 var response = new ChallengeResponse
                 {
                     ChallengeSucceeded = challengeSucceeded,
                     PenalizedPlayerId = penalizedPlayerId,
-                    Survived = penaltyResult.Survived,
-                    Eliminated = penaltyResult.Eliminated,
-                    NextPhase = penaltyResult.NextPhase,
+                    Survived = false,
+                    Eliminated = false,
+                    NextPhase = "PenaltyResolution",
+                    AwaitingTriggerPull = true,
                     StateVersion = match.StateVersion
                 };
 

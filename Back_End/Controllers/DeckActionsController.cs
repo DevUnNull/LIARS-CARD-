@@ -13,13 +13,16 @@ namespace Back_End.Controllers
     {
         private readonly DeckActionService _deckActionService;
         private readonly ChallengeService _challengeService;
+        private readonly PenaltyService _penaltyService;
 
         public DeckActionsController(
             DeckActionService deckActionService,
-            ChallengeService challengeService)
+            ChallengeService challengeService,
+            PenaltyService penaltyService)
         {
             _deckActionService = deckActionService;
             _challengeService = challengeService;
+            _penaltyService = penaltyService;
         }
 
         private string? GetCurrentPlayerId()
@@ -80,6 +83,34 @@ namespace Back_End.Controllers
             }
 
             var response = await _challengeService.ChallengeAsync(matchId, playerId, request);
+            return Ok(response);
+        }
+
+        /// <summary>
+        /// Người chơi bị phạt chủ động bóp cò súng Nga (Russian Roulette).
+        /// </summary>
+        [HttpPost("pull-trigger")]
+        [ProducesResponseType(typeof(PullTriggerResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status409Conflict)]
+        public async Task<ActionResult<PullTriggerResponse>> PullTrigger(
+            [FromRoute] string matchId,
+            [FromBody] PullTriggerRequest request)
+        {
+            string? playerId = GetCurrentPlayerId();
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return Unauthorized(new GameErrorResponse
+                {
+                    Code = "UNAUTHORIZED",
+                    Message = "Không xác định được danh tính người chơi."
+                });
+            }
+
+            var response = await _penaltyService.PullTriggerAsync(matchId, playerId, request);
             return Ok(response);
         }
     }

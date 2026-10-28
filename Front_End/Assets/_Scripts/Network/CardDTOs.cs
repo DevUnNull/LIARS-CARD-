@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace LiarsCard.Network
@@ -45,6 +45,7 @@ namespace LiarsCard.Network
         public List<PublicPlayerStateDto> players = new List<PublicPlayerStateDto>();
         public PublicLastPlayDto lastPlay;
         public string winnerPlayerId;
+        public string penalizedPlayerId;
     }
 
     [Serializable]
@@ -81,6 +82,27 @@ namespace LiarsCard.Network
         public bool survived;
         public bool eliminated;
         public string nextPhase;
+        public bool awaitingTriggerPull;
+        public int stateVersion;
+    }
+
+    [Serializable]
+    public class PullTriggerRequest
+    {
+        public string actionId;
+        public int expectedVersion;
+    }
+
+    [Serializable]
+    public class PullTriggerResponse
+    {
+        public string matchId;
+        public string penalizedPlayerId;
+        public bool isBulletHit;
+        public bool survived;
+        public bool eliminated;
+        public string nextPhase;
+        public string winnerPlayerId;
         public int stateVersion;
     }
 

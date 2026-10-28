@@ -1,7 +1,8 @@
-﻿using UnityEditor;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using LiarsCard.Network;
+using LiarsCard.Cards3D;
 
 namespace LiarsCard.Editor
 {
@@ -21,14 +22,14 @@ namespace LiarsCard.Editor
                 }
             }
 
-            // Tim hoac tao GameObject [Gameplay_Managers]
+            // Tìm hoặc tạo GameObject [Gameplay_Managers]
             GameObject managersObj = GameObject.Find("[Gameplay_Managers]");
             if (managersObj == null)
             {
                 managersObj = new GameObject("[Gameplay_Managers]");
             }
 
-            // Dam bao co day du cac Service & UI Components
+            // Đảm bảo có đầy đủ các Service & UI Components
             if (managersObj.GetComponent<MatchApiClient>() == null)
             {
                 managersObj.AddComponent<MatchApiClient>();
@@ -49,7 +50,23 @@ namespace LiarsCard.Editor
                 managersObj.AddComponent<CardBattleUI>();
             }
 
-            // Kiem tra AuthApiClient fallback
+            // Thêm các thành phần 3D Card FPP (Liar's Bar style)
+            if (managersObj.GetComponent<CardHand3D>() == null)
+            {
+                managersObj.AddComponent<CardHand3D>();
+            }
+
+            if (managersObj.GetComponent<CardAudioSystem>() == null)
+            {
+                managersObj.AddComponent<CardAudioSystem>();
+            }
+
+            if (managersObj.GetComponent<TableCenterPile3D>() == null)
+            {
+                managersObj.AddComponent<TableCenterPile3D>();
+            }
+
+            // Kiểm tra AuthApiClient fallback
             if (Object.FindAnyObjectByType<AuthApiClient>() == null)
             {
                 GameObject authObj = new GameObject("AuthApiClient_Fallback");
@@ -58,7 +75,7 @@ namespace LiarsCard.Editor
 
             EditorSceneManager.MarkSceneDirty(currentScene);
             EditorSceneManager.SaveScene(currentScene);
-            Debug.Log("<color=green>[LiarsCard] ĐÃ CÀI ĐẶT HOÀN HẢO TOÀN BỘ GAMEPLAY VÀO SAMPLESCENE!</color>");
+            Debug.Log("<color=green>[LiarsCard] ĐÃ CÀI ĐẶT HOÀN HẢO TOÀN BỘ GAMEPLAY VÀ 3D CARD SYSTEM VÀO SAMPLESCENE!</color>");
         }
     }
 }

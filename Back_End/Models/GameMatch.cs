@@ -11,6 +11,7 @@ namespace Back_End.Models
         public List<MatchPlayer> Players { get; set; } = new();
         public LastPlay? LastPlay { get; set; }
         public string? WinnerPlayerId { get; set; }
+        public string? PenalizedPlayerId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

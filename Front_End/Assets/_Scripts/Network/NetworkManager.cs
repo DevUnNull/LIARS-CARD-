@@ -1,10 +1,11 @@
-﻿using LiteNetLib;
+using LiteNetLib;
 using LiteNetLib.Utils;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
+using LiarsCard.Cards3D;
 
 public class NetworkManager : Singleton<NetworkManager>
 {
@@ -108,6 +109,52 @@ public class NetworkManager : Singleton<NetworkManager>
 
                             manager.RemoveRemotePlayer(playerId);
 
+                            break;
+                        }
+
+                    case 10: // Audio SFX Broadcast (Spatial 3D Sound)
+                        {
+                            string soundName = reader.GetString();
+                            float x = reader.GetFloat();
+                            float y = reader.GetFloat();
+                            float z = reader.GetFloat();
+
+                            var audioSys = CardAudioSystem.Instance;
+                            if (audioSys != null)
+                            {
+                                audioSys.PlaySpatialSfx(soundName, new Vector3(x, y, z));
+                            }
+                            break;
+                        }
+
+                    case 11: // Penalty Waiting For Trigger
+                        {
+                            string penalizedPlayerId = reader.GetString();
+                            string challengerPlayerId = reader.GetString();
+                            bool challengeSucceeded = reader.GetBool();
+
+                            var battleUI = CardBattleUI.Instance;
+                            if (battleUI != null)
+                            {
+                                battleUI.OnPenaltyWaitingForTrigger(penalizedPlayerId, challengerPlayerId, challengeSucceeded);
+                            }
+                            break;
+                        }
+
+                    case 12: // Trigger Result Broadcast
+                        {
+                            string penalizedPlayerId = reader.GetString();
+                            bool isBulletHit = reader.GetBool();
+                            bool survived = reader.GetBool();
+                            bool eliminated = reader.GetBool();
+                            string nextPhase = reader.GetString();
+                            string winnerPlayerId = reader.GetString();
+
+                            var battleUI = CardBattleUI.Instance;
+                            if (battleUI != null)
+                            {
+                                battleUI.OnTriggerResultReceived(penalizedPlayerId, isBulletHit, survived, eliminated, nextPhase, winnerPlayerId);
+                            }
                             break;
                         }
                 }

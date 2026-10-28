@@ -1,4 +1,4 @@
-﻿using Back_End.DTOs;
+using Back_End.DTOs;
 
 namespace Back_End.Services
 {
@@ -26,6 +26,14 @@ namespace Back_End.Services
             lock (lockObj)
             {
                 return players.Values.ToArray();
+            }
+        }
+
+        public bool TryGet(string playerId, out PlayerPosition? pos)
+        {
+            lock (lockObj)
+            {
+                return players.TryGetValue(playerId, out pos);
             }
         }
 

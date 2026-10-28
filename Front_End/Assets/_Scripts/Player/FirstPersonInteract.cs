@@ -59,7 +59,7 @@ public class FirstPersonInteract : MonoBehaviour
         if (auth == null || string.IsNullOrWhiteSpace(auth.AccessToken))
         {
             Debug.LogWarning("Not login yet.");
-            yield break;
+            // Force release locally even if server returns error
         }
 
         isLeavingSeat = true;
@@ -85,7 +85,7 @@ public class FirstPersonInteract : MonoBehaviour
                         $"Cant not leave: HTTP {request.responseCode}\n" +
                         $"{request.error}\n{request.downloadHandler.text}");
 
-                    yield break;
+                    // Force release locally even if server returns error
                 }
 
                 Debug.Log("Leave sit.");

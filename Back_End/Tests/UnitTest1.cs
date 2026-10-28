@@ -16,7 +16,7 @@ namespace Back_End.Tests
             var ruleEngine = new DeckRuleEngine();
             var turnStateMachine = new TurnStateMachine();
             var roundService = new DeckRoundService(turnStateMachine);
-            var penaltyService = new PenaltyService(roundService);
+            var penaltyService = new PenaltyService(roundService, store);
             var actionService = new DeckActionService(store, ruleEngine, turnStateMachine);
             var challengeService = new ChallengeService(store, ruleEngine, penaltyService);
             var matchService = new MatchService(store, roundService);
@@ -593,7 +593,6 @@ namespace Back_End.Tests
             };
 
             var challengeRes1 = await sys.challengeService.ChallengeAsync(match.MatchId, p2Id, challengeReq);
-            int pullsCountAfterFirst = p2.Revolver.PullsCount;
             int versionAfterFirst = match.StateVersion;
 
             // Retry same challenge request
@@ -601,8 +600,24 @@ namespace Back_End.Tests
 
             Assert.Equal(challengeRes1.StateVersion, challengeRes2.StateVersion);
             Assert.Equal(challengeRes1.PenalizedPlayerId, challengeRes2.PenalizedPlayerId);
-            Assert.Equal(pullsCountAfterFirst, p2.Revolver.PullsCount);
             Assert.Equal(versionAfterFirst, match.StateVersion);
+            Assert.Equal(RoundPhase.PenaltyResolution, match.Phase);
+            Assert.Equal(p2Id, match.PenalizedPlayerId);
+
+            // Penalized player (p2) actively pulls trigger
+            var pullReq = new PullTriggerRequest
+            {
+                ActionId = Guid.NewGuid(),
+                ExpectedVersion = match.StateVersion
+            };
+            var pullRes1 = await sys.penaltyService.PullTriggerAsync(match.MatchId, p2Id, pullReq);
+            int pullsCountAfterFirst = p2.Revolver.PullsCount;
+            Assert.Equal(1, pullsCountAfterFirst);
+
+            // Retrying pull trigger does not pull twice (idempotency)
+            var pullRes2 = await sys.penaltyService.PullTriggerAsync(match.MatchId, p2Id, pullReq);
+            Assert.Equal(pullsCountAfterFirst, p2.Revolver.PullsCount);
+            Assert.Equal(pullRes1.StateVersion, pullRes2.StateVersion);
         }
 
         // 24. Request actionId cũ nhưng payload khác bị từ chối (DUPLICATE_ACTION).
@@ -744,6 +759,67 @@ namespace Back_End.Tests
             tableService.SetCurrentMatch(1, "m_table_1_xyz");
             table = tableService.GetTableByID(1);
             Assert.Equal("m_table_1_xyz", table!.CurrentMatchId);
+        }
+
+        // 31. Khi Tố Đúng: Người bị tố (bluffer) bị phạt và phải CHỦ ĐỘNG bóp cò. Người khác không được bóp thay.
+        [Fact]
+        public async Task Test31_ActiveTriggerPull_WhenChallengeCorrect_BlufferPullsTrigger()
+        {
+            var sys = CreateTestSystem();
+            var match = CreateActiveMatchWithPlayers(sys.matchService, sys.store, 2, fixedRank: "K");
+
+            string p1Id = match.CurrentTurnPlayerId!;
+            var p1 = match.FindPlayer(p1Id)!;
+            string p2Id = match.Players.First(p => p.PlayerId != p1Id).PlayerId;
+            var p2 = match.FindPlayer(p2Id)!;
+
+            // p1 plays an Ace while table rank is King (BLUFF!)
+            p1.Hand[0] = new Card("c_bluff", Card.RankAce);
+            p1.Revolver = new PlayerRevolver(bulletChamber: 5, currentChamber: 0);
+
+            var playRes = await sys.actionService.PlayCardsAsync(match.MatchId, p1Id, new PlayCardsRequest
+            {
+                ActionId = Guid.NewGuid(),
+                ExpectedVersion = match.StateVersion,
+                CardInstanceIds = new List<string> { "c_bluff" }
+            });
+
+            // p2 challenges p1's play
+            var challengeRes = await sys.challengeService.ChallengeAsync(match.MatchId, p2Id, new ChallengeRequest
+            {
+                ActionId = Guid.NewGuid(),
+                ExpectedVersion = match.StateVersion,
+                TargetPlayId = playRes.PlayId
+            });
+
+            // Tố ĐÚNG: p2 thắng tố, p1 bị phạt
+            Assert.True(challengeRes.ChallengeSucceeded);
+            Assert.Equal(p1Id, challengeRes.PenalizedPlayerId);
+            Assert.True(challengeRes.AwaitingTriggerPull);
+            Assert.Equal("PenaltyResolution", challengeRes.NextPhase);
+            Assert.Equal(RoundPhase.PenaltyResolution, match.Phase);
+            Assert.Equal(p1Id, match.PenalizedPlayerId);
+
+            // p2 (người không bị phạt) cố tình bóp cò -> Phải bị từ chối với mã NOT_PENALIZED_PLAYER
+            var ex = await Assert.ThrowsAsync<GameRuleException>(() =>
+                sys.penaltyService.PullTriggerAsync(match.MatchId, p2Id, new PullTriggerRequest
+                {
+                    ActionId = Guid.NewGuid(),
+                    ExpectedVersion = match.StateVersion
+                }));
+            Assert.Equal("NOT_PENALIZED_PLAYER", ex.Code);
+
+            // p1 (người bị phạt) chủ động bóp cò -> Thành công!
+            var pullRes = await sys.penaltyService.PullTriggerAsync(match.MatchId, p1Id, new PullTriggerRequest
+            {
+                ActionId = Guid.NewGuid(),
+                ExpectedVersion = match.StateVersion
+            });
+
+            Assert.Equal(p1Id, pullRes.PenalizedPlayerId);
+            Assert.True(pullRes.Survived);
+            Assert.Equal("RoundStart", pullRes.NextPhase);
+            Assert.Equal(1, p1.Revolver.PullsCount);
         }
     }
 }
