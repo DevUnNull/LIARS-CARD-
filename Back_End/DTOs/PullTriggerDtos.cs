@@ -21,5 +21,6 @@ namespace Back_End.DTOs
         public string NextPhase { get; set; } = string.Empty;
         public string? WinnerPlayerId { get; set; }
         public int StateVersion { get; set; }
+        public string? PenaltyEventId { get; set; }
     }
 }

@@ -97,6 +97,10 @@ namespace Back_End.Services
                 match.Phase = RoundPhase.PenaltyResolution;
                 match.PenalizedPlayerId = penalizedPlayerId;
                 match.CurrentTurnPlayerId = penalizedPlayerId;
+                match.PenaltyResolved = false;
+                match.RoundTransitionHandled = false;
+                match.CurrentPenaltyEventId = null;
+                match.PenaltyAckedPlayers.Clear();
                 match.StateVersion++;
 
                 // Broadcast âm thanh Tố ("To") đồng bộ qua mạng tại vị trí người tố

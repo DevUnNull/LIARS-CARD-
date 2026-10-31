@@ -562,11 +562,19 @@ public class CardBattleUI : MonoBehaviour
         }
         else
         {
-            winnerPlayerId = res.winnerPlayerId;
+            if (!string.IsNullOrEmpty(res.winnerPlayerId))
+            {
+                winnerPlayerId = res.winnerPlayerId;
+            }
         }
 
-        // Đồng bộ trạng thái phạt từ Polling Server nếu gói UDP bị trễ
-        if (res.phase == "PenaltyResolution" && !string.IsNullOrEmpty(res.penalizedPlayerId))
+        string myId = TableSessionManager.Instance != null ? TableSessionManager.Instance.MyPlayerId : "";
+        var myPublicState = res.players?.Find(p => string.Equals(p.playerId, myId, System.StringComparison.OrdinalIgnoreCase));
+        bool isMeDead = myPublicState != null && !myPublicState.isAlive;
+        bool hasMatchEnded = !string.IsNullOrEmpty(res.winnerPlayerId) || res.phase == "MatchEnded" || !string.IsNullOrEmpty(winnerPlayerId);
+
+        // Đồng bộ trạng thái phạt từ Polling Server nếu gói UDP bị trễ (TUYỆT ĐỐI KHÔNG kích hoạt nếu người chơi đã chết hoặc trận đã kết thúc)
+        if (res.phase == "PenaltyResolution" && !string.IsNullOrEmpty(res.penalizedPlayerId) && !isMeDead && !hasMatchEnded)
         {
             if (!awaitingTriggerPull && !showPenaltyModal)
             {

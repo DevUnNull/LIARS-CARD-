@@ -16,11 +16,16 @@ namespace Back_End.Controllers
     {
         private readonly TableService _tableService;
         private readonly MatchService _matchService;
+        private readonly ConnectionTicketService _ticketService;
 
-        public TablesController(TableService tableService, MatchService matchService)
+        public TablesController(
+            TableService tableService,
+            MatchService matchService,
+            ConnectionTicketService ticketService)
         {
             _tableService = tableService;
             _matchService = matchService;
+            _ticketService = ticketService;
         }
 
         private string? GetCurrentPlayerId()
@@ -236,6 +241,12 @@ namespace Back_End.Controllers
             // Khởi tạo trận đấu bài
             _matchService.CreateMatch(matchId, playerIds!);
 
+            // Cấp vé kết nối (Join Ticket) riêng biệt cho từng người chơi tham gia bàn
+            foreach (var pid in playerIds!)
+            {
+                _ticketService.IssueTicket(pid, matchId, tableId);
+            }
+
             // Gán MatchId vào bàn để các client khác đọc được qua GET /api/tables/{id}
             _tableService.SetCurrentMatch(tableId, matchId);
 
@@ -243,8 +254,76 @@ namespace Back_End.Controllers
             {
                 TableId = tableId,
                 MatchId = matchId,
+                Status = "WaitingForPlayers",
+                PlayerCount = playerIds!.Count,
                 Message = "Bắt đầu trận đấu thành công.",
                 PlayerIds = playerIds!
+            });
+        }
+
+        /// <summary>
+        /// Người chơi tại bàn lấy vé kết nối (Join Ticket) của chính mình để vào authoritative match.
+        /// Tuyệt đối không trả về ticket của người chơi khác.
+        /// </summary>
+        [HttpGet("{tableId:int}/handoff")]
+        [ProducesResponseType(typeof(TableHandoffResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public IActionResult GetHandoff([FromRoute] int tableId)
+        {
+            string? playerId = GetCurrentPlayerId();
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return Unauthorized(new
+                {
+                    code = "UNAUTHORIZED",
+                    message = "Không xác định được danh tính người chơi."
+                });
+            }
+
+            var table = _tableService.GetTableByID(tableId);
+            if (table == null)
+            {
+                return NotFound(new
+                {
+                    code = "TABLE_NOT_FOUND",
+                    message = "Không tìm thấy bàn chơi."
+                });
+            }
+
+            if (string.IsNullOrEmpty(table.CurrentMatchId))
+            {
+                return Conflict(new
+                {
+                    code = "MATCH_NOT_STARTED",
+                    message = "Bàn chơi chưa khởi tạo trận đấu."
+                });
+            }
+
+            bool isSeated = table.Seats.Any(s => s.PlayerId == playerId);
+            if (!isSeated)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new
+                {
+                    code = "NOT_SEATED_AT_TABLE",
+                    message = "Bạn không ngồi ở bàn chơi này."
+                });
+            }
+
+            string? ticket = _ticketService.GetActiveTicket(playerId, tableId);
+            if (string.IsNullOrEmpty(ticket))
+            {
+                ticket = _ticketService.IssueTicket(playerId, table.CurrentMatchId, tableId);
+            }
+
+            return Ok(new TableHandoffResponse
+            {
+                MatchId = table.CurrentMatchId,
+                TableId = tableId,
+                JoinTicket = ticket,
+                ExpiresIn = ConnectionTicketService.LIFE_TIME
             });
         }
     }

@@ -1,6 +1,7 @@
 using Back_End.DTOs;
 using Back_End.Exceptions;
 using Back_End.Infrastructure.MatchState;
+using Back_End.Models;
 
 namespace Back_End.Services
 {
@@ -30,12 +31,14 @@ namespace Back_End.Services
                 Phase = match.Phase.ToString(),
                 StateVersion = match.StateVersion,
                 WinnerPlayerId = match.WinnerPlayerId,
-                PenalizedPlayerId = match.PenalizedPlayerId,
+                PenalizedPlayerId = (match.Phase == RoundPhase.PenaltyResolution && !match.PenaltyResolved) ? match.PenalizedPlayerId : null,
+                CurrentPenaltyEventId = match.CurrentPenaltyEventId,
                 Players = match.Players.Select(p => new PublicPlayerStateDto
                 {
                     PlayerId = p.PlayerId,
                     IsAlive = p.IsAlive,
-                    RemainingCardCount = p.RemainingCardCount
+                    RemainingCardCount = p.RemainingCardCount,
+                    IsConnected = p.IsConnected
                 }).ToList()
             };
 

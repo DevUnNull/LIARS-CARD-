@@ -83,6 +83,7 @@ namespace Back_End.Services
             // Reset round data
             match.LastPlay = null;
             match.RoundNumber++;
+            match.PenalizedPlayerId = null;
 
             // Determine starting player
             int startingSeat = preferredStartingSeat ?? (match.RoundNumber - 1) % Math.Max(1, match.Players.Count);

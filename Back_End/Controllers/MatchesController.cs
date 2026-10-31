@@ -57,6 +57,34 @@ namespace Back_End.Controllers
         }
 
         /// <summary>
+        /// Tham gia vào trận đấu Authoritative Server bằng Join Ticket cấp từ bàn chơi (Handoff).
+        /// </summary>
+        [HttpPost("{matchId}/join")]
+        [ProducesResponseType(typeof(PublicMatchStateResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<PublicMatchStateResponse>> JoinMatch(
+            [FromRoute] string matchId,
+            [FromBody] JoinMatchRequest request)
+        {
+            string? playerId = GetCurrentPlayerId();
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return Unauthorized(new GameErrorResponse
+                {
+                    Code = "UNAUTHORIZED",
+                    Message = "Không xác định được danh tính người chơi."
+                });
+            }
+
+            await _matchService.JoinMatchAsync(matchId, playerId, request.JoinTicket);
+            var state = _matchQueryService.GetPublicState(matchId);
+            return Ok(state);
+        }
+
+        /// <summary>
         /// Đánh dấu sẵn sàng (Ready) và tự động bắt đầu vòng chơi khi toàn bộ người chơi sẵn sàng.
         /// </summary>
         [HttpPost("{matchId}/ready")]
@@ -118,6 +146,34 @@ namespace Back_End.Controllers
 
             var hand = _matchQueryService.GetPlayerHand(matchId, playerId);
             return Ok(hand);
+        }
+
+        /// <summary>
+        /// Xác nhận đã hoàn thành animation xử phạt (ACK). Server kiểm tra và chuyển tiếp vòng đấu hoặc kết thúc trận.
+        /// </summary>
+        [HttpPost("{matchId}/penalty/ack")]
+        [ProducesResponseType(typeof(PenaltyAckResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(GameErrorResponse), StatusCodes.Status409Conflict)]
+        public async Task<ActionResult<PenaltyAckResponse>> AcknowledgePenalty(
+            [FromRoute] string matchId,
+            [FromBody] PenaltyAckRequest request)
+        {
+            string? playerId = GetCurrentPlayerId();
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return Unauthorized(new GameErrorResponse
+                {
+                    Code = "UNAUTHORIZED",
+                    Message = "Không xác định được danh tính người chơi."
+                });
+            }
+
+            var response = await _matchService.AcknowledgePenaltyAsync(matchId, playerId, request);
+            return Ok(response);
         }
     }
 }
