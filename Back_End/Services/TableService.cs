@@ -1,7 +1,7 @@
-﻿using Back_End.DTOs;
+using System.Collections.Generic;
+using System.Linq;
+using Back_End.DTOs;
 using Back_End.Models;
-using Microsoft.CodeAnalysis.Elfie.Serialization;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace Back_End.Services
 {
@@ -22,7 +22,9 @@ namespace Back_End.Services
                 GameTable table = new GameTable
                 {
                     Id = tableId,
-                    Status = TableStatus.Waiting
+                    Status = TableStatus.Waiting,
+                    HostPlayerId = null,
+                    CurrentMatchId = null
                 };
 
                 for (int seatIndex = 0; seatIndex < 4; seatIndex++)
@@ -51,6 +53,8 @@ namespace Back_End.Services
                     {
                         TableId = tables[i].Id,
                         Status = tables[i].Status,
+                        HostPlayerId = tables[i].HostPlayerId,
+                        CurrentMatchId = tables[i].CurrentMatchId,
                         Capacity = tables[i].Seats.Count,
                         PlayerCount = tables[i].Seats.Count(seat => seat.PlayerId != null)
                     };
@@ -72,7 +76,7 @@ namespace Back_End.Services
             }
         }
 
-        public TableResponse GetTableByID(int id)
+        public TableResponse? GetTableByID(int id)
         {
             lock (tableLock)
             {
@@ -87,6 +91,8 @@ namespace Back_End.Services
                 {
                     TableId = table.Id,
                     Status = table.Status,
+                    HostPlayerId = table.HostPlayerId,
+                    CurrentMatchId = table.CurrentMatchId,
                     Capacity = table.Seats.Count,
                     PlayerCount = table.Seats.Count(seat => seat.PlayerId != null)
                 };
@@ -146,6 +152,12 @@ namespace Back_End.Services
 
                 seat.PlayerId = playerId;
                 seat.IsReady = false;
+
+                if (string.IsNullOrEmpty(table.HostPlayerId))
+                {
+                    table.HostPlayerId = playerId;
+                }
+
                 return null;
             }
         }
@@ -165,13 +177,22 @@ namespace Back_End.Services
                         continue;
                     }
 
-                    if (tables[i].Status != TableStatus.Waiting)
-                    {
-                        return "TABLE_NOT_WAITING";
-                    }
-
                     seat.PlayerId = null;
                     seat.IsReady = false;
+
+                    if (tables[i].HostPlayerId == playerId)
+                    {
+                        var nextSeated = tables[i].Seats.FirstOrDefault(s => !string.IsNullOrEmpty(s.PlayerId));
+                        tables[i].HostPlayerId = nextSeated?.PlayerId;
+                    }
+
+                    // Neu tat ca cac ghe deu trong, reset ban ve Waiting va xoa match
+                    if (tables[i].Seats.All(s => string.IsNullOrEmpty(s.PlayerId)))
+                    {
+                        tables[i].Status = TableStatus.Waiting;
+                        tables[i].CurrentMatchId = null;
+                        tables[i].HostPlayerId = null;
+                    }
 
                     return null;
                 }
@@ -206,6 +227,113 @@ namespace Back_End.Services
                 }
 
                 return "PLAYER_NOT_SEATED";
+            }
+        }
+
+        public (string? error, List<string>? playerIds) ValidateAndStartMatch(int tableId, string requestingPlayerId)
+        {
+            lock (tableLock)
+            {
+                GameTable? table = tables.Find(t => t.Id == tableId);
+
+                if (table == null)
+                {
+                    return ("TABLE_NOT_FOUND", null);
+                }
+
+                if (table.Status != TableStatus.Waiting)
+                {
+                    return ("TABLE_NOT_WAITING", null);
+                }
+
+                if (table.HostPlayerId != requestingPlayerId)
+                {
+                    return ("NOT_TABLE_HOST", null);
+                }
+
+                var seatedPlayers = table.Seats
+                    .Where(s => !string.IsNullOrEmpty(s.PlayerId))
+                    .OrderBy(s => s.SeatIndex)
+                    .ToList();
+
+                if (seatedPlayers.Count < 2)
+                {
+                    return ("INSUFFICIENT_PLAYERS", null);
+                }
+
+                // Kiểm tra xem tất cả người chơi khác (ngoài chủ bàn) đã sẵn sàng chưa
+                bool allOthersReady = seatedPlayers
+                    .Where(s => s.PlayerId != requestingPlayerId)
+                    .All(s => s.IsReady);
+
+                if (!allOthersReady)
+                {
+                    return ("TABLE_NOT_READY", null);
+                }
+
+                // Chủ bàn bấm Bắt đầu đồng nghĩa Chủ bàn sẵn sàng
+                var hostSeat = seatedPlayers.First(s => s.PlayerId == requestingPlayerId);
+                hostSeat.IsReady = true;
+
+                table.Status = TableStatus.Playing;
+
+                var playerIds = seatedPlayers.Select(s => s.PlayerId!).ToList();
+                return (null, playerIds);
+            }
+        }
+
+        public void SetCurrentMatch(int tableId, string matchId)
+        {
+            lock (tableLock)
+            {
+                var table = tables.Find(t => t.Id == tableId);
+                if (table != null)
+                {
+                    table.CurrentMatchId = matchId;
+                    table.Status = TableStatus.Playing;
+                }
+            }
+        }
+
+        public void EndMatch(int tableId)
+        {
+            lock (tableLock)
+            {
+                var table = tables.Find(t => t.Id == tableId);
+                if (table != null)
+                {
+                    table.CurrentMatchId = null;
+                    table.Status = TableStatus.Waiting;
+                    foreach (var seat in table.Seats)
+                    {
+                        seat.IsReady = false;
+                    }
+                }
+            }
+        }
+
+        public void EndMatchByMatchId(string matchId)
+        {
+            lock (tableLock)
+            {
+                var table = tables.Find(t => t.CurrentMatchId == matchId);
+                if (table != null)
+                {
+                    table.CurrentMatchId = null;
+                    table.Status = TableStatus.Waiting;
+                    foreach (var seat in table.Seats)
+                    {
+                        seat.IsReady = false;
+                    }
+                }
+            }
+        }
+
+        public GameTable? GetTableByMatchId(string matchId)
+        {
+            lock (tableLock)
+            {
+                return tables.Find(t => t.CurrentMatchId == matchId);
             }
         }
     }

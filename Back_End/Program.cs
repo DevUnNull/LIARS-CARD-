@@ -1,5 +1,8 @@
-﻿using Back_End.Data;
+using Back_End.Data;
+using Back_End.Filters;
+using Back_End.Infrastructure.MatchState;
 using Back_End.Models;
+using Back_End.Rules;
 using Back_End.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
@@ -12,9 +15,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<GameExceptionFilter>();
+});
 builder.Services.AddEndpointsApiExplorer();
-
 
 builder.Services.AddSwaggerGen(options =>
 {
@@ -23,6 +28,13 @@ builder.Services.AddSwaggerGen(options =>
         Title = "LiarCard API",
         Version = "v1"
     });
+
+    var xmlFilename = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
+    if (File.Exists(xmlPath))
+    {
+        options.IncludeXmlComments(xmlPath);
+    }
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -70,6 +82,20 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddSingleton<TableService>();
 
+// Match Results Persistence & Services
+builder.Services.AddSingleton<IMatchResultRepository, MatchResultRepository>();
+builder.Services.AddScoped<MatchResultService>();
+
+// Liars Card Gameplay Engine & Services
+builder.Services.AddSingleton<IMatchStore, InMemoryMatchStore>();
+builder.Services.AddSingleton<DeckRuleEngine>();
+builder.Services.AddSingleton<TurnStateMachine>();
+builder.Services.AddScoped<DeckRoundService>();
+builder.Services.AddScoped<PenaltyService>();
+builder.Services.AddScoped<DeckActionService>();
+builder.Services.AddScoped<ChallengeService>();
+builder.Services.AddScoped<MatchService>();
+builder.Services.AddScoped<MatchQueryService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new Exception("JWT Key chưa được cấu hình");
@@ -134,26 +160,45 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddSingleton<PlayerConnectionService>();
+builder.Services.AddHostedService<LobbyNetworkService>();
+builder.Services.AddSingleton<ConnectionTicketService>();
+builder.Services.AddSingleton<PlayerPositionService>();
+builder.Services.AddSingleton<GameBroadcastService>();
 
 var app = builder.Build();
 
-var revokedTokens = app.Services
-    .GetRequiredService<IMongoCollection<RevokedAccessToken>>();
+try
+{
+    var revokedTokens = app.Services
+        .GetRequiredService<IMongoCollection<RevokedAccessToken>>();
 
-await revokedTokens.Indexes.CreateOneAsync(
-    new CreateIndexModel<RevokedAccessToken>(
-        Builders<RevokedAccessToken>.IndexKeys.Ascending(t => t.Jti),
-        new CreateIndexOptions { Unique = true }));
+    await revokedTokens.Indexes.CreateOneAsync(
+        new CreateIndexModel<RevokedAccessToken>(
+            Builders<RevokedAccessToken>.IndexKeys.Ascending(t => t.Jti),
+            new CreateIndexOptions { Unique = true }));
 
-//Only a account an Email
-var database = app.Services.GetRequiredService<IMongoDatabase>();
+    // Only a account an Email
+    var database = app.Services.GetRequiredService<IMongoDatabase>();
 
-var users = database.GetCollection<User>("Users");
+    var users = database.GetCollection<User>("Users");
 
-await users.Indexes.CreateOneAsync(
-    new CreateIndexModel<User>(
-        Builders<User>.IndexKeys.Ascending(u => u.Email),
-        new CreateIndexOptions { Unique = true }));
+    await users.Indexes.CreateOneAsync(
+        new CreateIndexModel<User>(
+            Builders<User>.IndexKeys.Ascending(u => u.Email),
+            new CreateIndexOptions { Unique = true }));
+
+    // MatchResults unique index on MatchId
+    var matchResults = database.GetCollection<MatchResult>("MatchResults");
+    await matchResults.Indexes.CreateOneAsync(
+        new CreateIndexModel<MatchResult>(
+            Builders<MatchResult>.IndexKeys.Ascending(r => r.MatchId),
+            new CreateIndexOptions { Unique = true }));
+}
+catch (Exception ex)
+{
+    app.Logger.LogWarning(ex, "Không thể kết nối hoặc khởi tạo Indexes trên MongoDB. Hệ thống tiếp tục sử dụng in-memory store.");
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

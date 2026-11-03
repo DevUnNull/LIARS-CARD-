@@ -1,17 +1,28 @@
-
+﻿
 using System;
 using System.Collections;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 
-public class AuthApiClient : MonoBehaviour
+public class AuthApiClient : Singleton<AuthApiClient>
 {
+    protected override void Awake()
+    {
+        base.Awake();
+
+        if (Instance != this)
+            return;
+
+        DontDestroyOnLoad(gameObject);
+    }
+
     [SerializeField]
-    private string baseUrl = "http://localhost:5000";
+    public string baseUrl = "http://localhost:5000";
 
     public string AccessToken { get; private set; }
     public string RefreshToken { get; private set; }
+    public string CurrentUserId { get; private set; }
 
 
     public void TestMeButton()
@@ -70,6 +81,12 @@ public class AuthApiClient : MonoBehaviour
     {
         public string message;
         public string title;
+    }
+
+    [Serializable]
+    public class SitDownData
+    {
+        public int seatIndex;
     }
 
     public IEnumerator Register(
@@ -136,12 +153,44 @@ public class AuthApiClient : MonoBehaviour
 
                 AccessToken = response.accessToken;
                 RefreshToken = response.refreshToken;
+                CurrentUserId = response.user != null ? response.user.id : ExtractUserIdFromToken(response.accessToken);
 
                 Debug.Log("Login thành công. User ID: " +
                     (response.user != null ? response.user.id : "Không có"));
 
                 callback?.Invoke(true, "Đăng nhập thành công!");
             });
+    }
+
+        public static string ExtractUserIdFromToken(string token)
+    {
+        if (string.IsNullOrEmpty(token)) return null;
+        try
+        {
+            var parts = token.Split('.');
+            if (parts.Length < 2) return null;
+            string payload = parts[1];
+            payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+            byte[] bytes = Convert.FromBase64String(payload);
+            string json = Encoding.UTF8.GetString(bytes);
+            // Simple extraction for sub or nameid
+            int subIdx = json.IndexOf("\"sub\":\"", StringComparison.OrdinalIgnoreCase);
+            if (subIdx >= 0)
+            {
+                int start = subIdx + 7;
+                int end = json.IndexOf('"', start);
+                if (end > start) return json.Substring(start, end - start);
+            }
+            int nameidIdx = json.IndexOf("\"nameid\":\"", StringComparison.OrdinalIgnoreCase);
+            if (nameidIdx >= 0)
+            {
+                int start = nameidIdx + 10;
+                int end = json.IndexOf('"', start);
+                if (end > start) return json.Substring(start, end - start);
+            }
+        }
+        catch { }
+        return null;
     }
 
     private IEnumerator SendRequest(
