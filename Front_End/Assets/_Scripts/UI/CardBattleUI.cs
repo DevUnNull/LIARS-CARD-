@@ -764,6 +764,12 @@ public class CardBattleUI : MonoBehaviour
 
     #region uGUI Hierarchy Updates
 
+    // UpdateUGUI chạy mỗi frame: chỉ gán text khi đổi để TMP không dựng lại mesh liên tục
+    private static void SetTxt(TMP_Text t, string s)
+    {
+        if (t != null && !string.Equals(t.text, s)) t.text = s;
+    }
+
     public void UpdateUGUI()
     {
         bool inBattle = IsInBattle;
@@ -784,17 +790,17 @@ public class CardBattleUI : MonoBehaviour
                     {
                         if (isPenalizedPlayer)
                         {
-                            rrDetailText.text = "Bạn vừa vi phạm luật chơi! Hãy giữ chuột trái hoặc nhấn nút để bóp cò!";
+                            SetTxt(rrDetailText, "Bạn vừa vi phạm luật chơi! Hãy giữ chuột trái hoặc nhấn nút để bóp cò!");
                         }
                         else
                         {
                             string victim = !string.IsNullOrEmpty(penalizedPlayerId) ? penalizedPlayerId : "Đối thủ";
-                            rrDetailText.text = $"[{victim}] đang run rẩy đặt súng vào đầu và chuẩn bị bóp cò... <i>(Đang chờ đối phương bóp cò)</i>";
+                            SetTxt(rrDetailText, $"[{victim}] đang run rẩy đặt súng vào đầu và chuẩn bị bóp cò... <i>(Đang chờ đối phương bóp cò)</i>");
                         }
                     }
                     else
                     {
-                        rrDetailText.text = penaltyDetail;
+                        SetTxt(rrDetailText, penaltyDetail);
                     }
                 }
 
@@ -830,11 +836,11 @@ public class CardBattleUI : MonoBehaviour
 
                 if (goTitleText != null)
                 {
-                    goTitleText.text = isMeWinner ? "🏆 <color=#F1C40F>CHIẾN THẮNG TUYỆT ĐỐI!</color> 🏆" : "💀 <color=#E74C3C>BẠN ĐÃ THUA CUỘC!</color> 💀";
+                    SetTxt(goTitleText, isMeWinner ? "🏆 <color=#F1C40F>CHIẾN THẮNG TUYỆT ĐỐI!</color> 🏆" : "💀 <color=#E74C3C>BẠN ĐÃ THUA CUỘC!</color> 💀");
                 }
                 if (goWinnerText != null)
                 {
-                    goWinnerText.text = isMeWinner ? "Bạn là người sống sót duy nhất tại bàn chơi Liar's Card!" : $"Người chiến thắng ván chơi: <b>{winnerPlayerId}</b>";
+                    SetTxt(goWinnerText, isMeWinner ? "Bạn là người sống sót duy nhất tại bàn chơi Liar's Card!" : $"Người chiến thắng ván chơi: <b>{winnerPlayerId}</b>");
                 }
 
                 if (battleHUD != null && battleHUD.activeSelf) battleHUD.SetActive(false);
@@ -851,12 +857,12 @@ public class CardBattleUI : MonoBehaviour
             {
                 if (roundText != null)
                 {
-                    roundText.text = $"<b>VÒNG: {roundNumber}</b>\n<size=12>Ver: {stateVersion}</size>";
+                    SetTxt(roundText, $"<b>VÒNG: {roundNumber}</b>\n<size=12>Ver: {stateVersion}</size>");
                 }
 
                 if (tableRankText != null)
                 {
-                    tableRankText.text = $"RANK BÀN: <color=#F1C40F><b>QUÂN {tableRank}</b></color>";
+                    SetTxt(tableRankText, $"RANK BÀN: <color=#F1C40F><b>QUÂN {tableRank}</b></color>");
                 }
 
                 if (imageCurrentCart != null)
@@ -883,12 +889,12 @@ public class CardBattleUI : MonoBehaviour
                 {
                     if (IsMyTurn)
                     {
-                        currentTurnText.text = "<color=#2ECC71><b>👉 LƯỢT CỦA BẠN! [E]</b></color>";
+                        SetTxt(currentTurnText, "<color=#2ECC71><b>👉 LƯỢT CỦA BẠN! [E]</b></color>");
                     }
                     else
                     {
                         string shortTurnId = currentTurnPlayerId.Length > 12 ? currentTurnPlayerId.Substring(0, 12) + "..." : currentTurnPlayerId;
-                        currentTurnText.text = $"Đang đợi: <b>{shortTurnId}</b>";
+                        SetTxt(currentTurnText, $"Đang đợi: <b>{shortTurnId}</b>");
                     }
                 }
 
@@ -897,11 +903,11 @@ public class CardBattleUI : MonoBehaviour
                     if (lastPlay != null && !string.IsNullOrEmpty(lastPlay.playId))
                     {
                         string pId = lastPlay.playerId.Length > 12 ? lastPlay.playerId.Substring(0, 12) + "..." : lastPlay.playerId;
-                        lastPlayText.text = $"Lượt trước: <color=#00FFFF><b>{pId}</b></color> vừa đánh úp <b>{lastPlay.cardCount}</b> lá bài! (Bấm [X] để Bắt Láo)";
+                        SetTxt(lastPlayText, $"Lượt trước: <color=#00FFFF><b>{pId}</b></color> vừa đánh úp <b>{lastPlay.cardCount}</b> lá bài! (Bấm [X] để Bắt Láo)");
                     }
                     else
                     {
-                        lastPlayText.text = "<i>(Chưa có ai đánh bài trong vòng này)</i>";
+                        SetTxt(lastPlayText, "<i>(Chưa có ai đánh bài trong vòng này)</i>");
                     }
                 }
 
@@ -911,7 +917,7 @@ public class CardBattleUI : MonoBehaviour
                     playCardsButton.interactable = IsMyTurn && selCount >= 1 && selCount <= 3;
                     if (playCardsButtonText != null)
                     {
-                        playCardsButtonText.text = $"HẠ {selCount} LÁ BÀI [E]";
+                        SetTxt(playCardsButtonText, $"HẠ {selCount} LÁ BÀI [E]");
                     }
                 }
 
@@ -928,18 +934,18 @@ public class CardBattleUI : MonoBehaviour
                     {
                         // Thay panel bằng thông báo: người bị phạt thấy hướng dẫn, người khác thấy đang chờ
                         string victim = !string.IsNullOrEmpty(penalizedPlayerId) ? penalizedPlayerId : "Đối thủ";
-                        hudHintText.text = !awaitingTriggerPull ? penaltyDetail
+                        string penaltyHint = !awaitingTriggerPull ? penaltyDetail
                             : isPenalizedPlayer ? "<color=red><b>BẠN BỊ PHẠT!</b></color> Chờ lên đạn rồi CLICK CHUỘT TRÁI để bóp cò"
                             : $"<color=yellow>[{victim}] đang dí súng vào đầu...</color>";
-                        hudHintText.text += myShotInfo;
+                        SetTxt(hudHintText, penaltyHint + myShotInfo);
                     }
                     else if (IsMyTurn)
                     {
-                        hudHintText.text = "<b>ĐẾN LƯỢT:</b> [A/D]: CHỌN LÁ | [SPACE]: CHỌN/BỎ LÁ (TỐI ĐA 3) | [E]: ĐÁNH BÀI | [X]: BẮT LÁO" + myShotInfo;
+                        SetTxt(hudHintText, "<b>ĐẾN LƯỢT:</b> [A/D]: CHỌN LÁ | [SPACE]: CHỌN/BỎ LÁ (TỐI ĐA 3) | [E]: ĐÁNH BÀI | [X]: BẮT LÁO" + myShotInfo);
                     }
                     else
                     {
-                        hudHintText.text = "<b>NGOÀI LƯỢT:</b> [GIỮ SPACE]: HÉ BÀI XEM | [CHUỘT]: QUAN SÁT | [X]: BẮT LÁO" + myShotInfo;
+                        SetTxt(hudHintText, "<b>NGOÀI LƯỢT:</b> [GIỮ SPACE]: HÉ BÀI XEM | [CHUỘT]: QUAN SÁT | [X]: BẮT LÁO" + myShotInfo);
                     }
                 }
             }

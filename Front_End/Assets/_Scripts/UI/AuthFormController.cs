@@ -26,6 +26,13 @@ public class AuthFormController : MonoBehaviour
 
     private bool isBusy;
 
+    // Enter ở ô mật khẩu = gửi đi
+    private void Start()
+    {
+        if (loginPassword != null) loginPassword.onSubmit.AddListener(_ => OnLoginClicked());
+        if (registerPassword != null) registerPassword.onSubmit.AddListener(_ => OnRegisterClicked());
+    }
+
     public void OnLoginClicked()
     {
         if (isBusy) return;
@@ -105,7 +112,10 @@ public class AuthFormController : MonoBehaviour
                 loginButton.interactable = true;
                 isBusy = false;
 
-                SceneManager.LoadScene("MainScene");
+                // Cùng scene: bartender chào, camera lùi ra chỗ spawn rồi trao điều khiển; không có controller thì giữ hành vi cũ
+                var room = FindFirstObjectByType<LoginRoomController>();
+                if (room != null) room.Welcome();
+                else SceneManager.LoadScene("MainScene");
                 yield break;
             }
         }

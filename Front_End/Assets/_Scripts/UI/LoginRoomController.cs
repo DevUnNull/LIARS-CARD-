@@ -2,47 +2,82 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Serialization;
 
-public enum LoginViewState { RoomOverview, Transitioning, LoginActive }
+public enum LoginViewState { RoomOverview, Transitioning, LoginActive, EnteringBar, InGame }
 
 /// <summary>
-/// Màn đăng nhập trong quán bar 3D: camera bay từ cảnh rộng vào màn hình máy tính khi bấm vào PC,
-/// sau đó form đăng nhập (Canvas) mờ dần hiện ra. Esc để lùi lại.
+/// Đăng nhập ngay trong quán bar (MainScene) bằng hội thoại với bartender: bấm vào bartender, camera tiến lại gần,
+/// bartender hỏi "cậu là ai?" rồi form đăng nhập hiện ra ngay trong cảnh. Đăng nhập xong bartender chào,
+/// camera lùi dần ra chỗ spawn rồi trao quyền điều khiển cho người chơi.
 /// </summary>
+[DefaultExecutionOrder(-100)]
 public class LoginRoomController : MonoBehaviour
 {
     [Header("Camera")]
     [Tooltip("Camera sẽ được di chuyển. Để trống thì dùng Camera.main.")]
     [SerializeField] private Transform cameraTransform;
-    [Tooltip("Vị trí/góc nhìn toàn cảnh quán.")]
+    [Tooltip("Góc nhìn toàn cảnh quầy bar lúc mới vào.")]
     [SerializeField] private Transform overviewAnchor;
-    [Tooltip("Vị trí/góc nhìn cận màn hình máy tính.")]
-    [SerializeField] private Transform loginAnchor;
-    [Tooltip("Thời gian bay giữa hai góc (giây).")]
-    [SerializeField] private float transitionDuration = 1.4f;
+    [Tooltip("Góc nhìn khi nói chuyện với bartender.")]
+    [FormerlySerializedAs("loginAnchor")]
+    [SerializeField] private Transform talkAnchor;
+    [Tooltip("Thời gian camera tiến lại gần / lùi ra (giây).")]
+    [SerializeField] private float transitionDuration = 1.6f;
     [Tooltip("Độ rung nhẹ của camera ở toàn cảnh (mét).")]
     [SerializeField] private float swayAmount = 0.03f;
+    [SerializeField] private float introFov = 55f;
 
-    [Header("Tương tác")]
-    [Tooltip("Collider của máy tính để bấm vào.")]
-    [SerializeField] private Collider pcCollider;
-    [Tooltip("Renderer của màn hình PC (sáng hơn khi rê chuột vào).")]
-    [SerializeField] private Renderer screenRenderer;
-    [SerializeField] private Color screenIdle = new Color(0.05f, 0.35f, 0.12f);
-    [SerializeField] private Color screenHover = new Color(0.15f, 1.1f, 0.35f);
+    [Header("Bartender")]
+    [Tooltip("Collider của bartender để bấm vào.")]
+    [SerializeField] private Collider bartenderCollider;
+    [SerializeField] private string bartenderName = "Bartender";
+    [Tooltip("Các câu bartender nói trước khi hiện form. Bấm chuột / Space để qua câu.")]
+    [TextArea(1, 3)]
+    [SerializeField] private string[] greetLines =
+    {
+        "Này, người lạ! Quán này không tiếp kẻ vô danh đâu.",
+        "Nói đi... cậu là ai? Cho tôi tên đăng nhập và mật khẩu.",
+    };
+    [TextArea(1, 3)]
+    [SerializeField] private string welcomeLine = "Hà, ra là khách quen! Vào đi, bàn trống đang chờ cậu đấy.";
+    [TextArea(1, 3)]
+    [SerializeField] private string cancelLine = "Hừ, không muốn nói thì thôi. Cần thì quay lại.";
+    [SerializeField] private float charsPerSecond = 45f;
+
+    [Header("Vào quán sau khi đăng nhập")]
+    [Tooltip("Người chơi (bị khoá điều khiển trong lúc đăng nhập). Để trống thì tự tìm PlayerController.")]
+    [SerializeField] private Transform player;
+    [Tooltip("Thời gian camera lùi ra chỗ spawn (giây). Bấm phím bất kỳ để bỏ qua.")]
+    [SerializeField] private float enterDuration = 4f;
+    [Tooltip("Độ nhô cao của đường bay giữa chừng (mét).")]
+    [SerializeField] private float enterArcHeight = 1.0f;
+    [Tooltip("Các object ẩn đi sau khi vào quán (canvas hội thoại...).")]
+    [SerializeField] private GameObject[] hideWhenInGame;
 
     [Header("UI")]
-    [Tooltip("CanvasGroup của form đăng nhập (mờ dần khi camera đến nơi).")]
+    [Tooltip("CanvasGroup của form đăng nhập.")]
     [SerializeField] private CanvasGroup formGroup;
     [Tooltip("Dòng gợi ý ở dưới màn hình.")]
     [SerializeField] private TMP_Text hintText;
+    [Tooltip("CanvasGroup của khung hội thoại.")]
+    [SerializeField] private CanvasGroup dialogueGroup;
+    [SerializeField] private TMP_Text nameText;
+    [SerializeField] private TMP_Text dialogueText;
     [SerializeField] private float fadeDuration = 0.35f;
 
     public LoginViewState State { get; private set; } = LoginViewState.RoomOverview;
 
     private Camera cam;
-    private Material screenMat;
     private bool hovering;
+    private Coroutine talkRoutine;
+
+    private Vector3 homeLocalPos;
+    private Quaternion homeLocalRot;
+    private float homeFov;
+    private Behaviour[] lockedScripts;
+    private Renderer playerRenderer;
+    private GameObject firstPersonCanvas;
 
     private void Awake()
     {
@@ -50,23 +85,28 @@ public class LoginRoomController : MonoBehaviour
             cameraTransform = Camera.main.transform;
         if (cameraTransform != null)
             cam = cameraTransform.GetComponent<Camera>();
-
-        if (screenRenderer != null)
-        {
-            screenMat = screenRenderer.material;
-            screenMat.EnableKeyword("_EMISSION");
-        }
     }
 
     private void Start()
     {
+        LockPlayer();
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
-        SetForm(0f);
+        // Các canvas có thể đang tắt trong scene: bật lên, ẩn bằng alpha
+        if (formGroup != null) formGroup.gameObject.SetActive(true);
+        if (hintText != null)
+        {
+            var hc = hintText.GetComponentInParent<Canvas>(true);
+            hc.gameObject.SetActive(true);
+            // Canvas gợi ý ban đầu không có raycaster nên ô nhập/nút trong khung hội thoại không nhận chuột
+            if (hc.GetComponent<UnityEngine.UI.GraphicRaycaster>() == null) hc.gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+            hc.sortingOrder = 20;
+        }
+        SetGroup(formGroup, 0f);
+        SetGroup(dialogueGroup, 0f);
         SnapTo(overviewAnchor);
         ApplyHint();
-        SetHover(false);
     }
 
     private void Update()
@@ -82,49 +122,187 @@ public class LoginRoomController : MonoBehaviour
         {
             var kb = Keyboard.current;
             if (kb != null && kb.escapeKey.wasPressedThisFrame)
-                GoToOverview();
+                CancelTalk();
         }
     }
 
-    /// <summary>Bay vào màn hình PC (dùng được từ nút UI hoặc script khác).</summary>
-    public void GoToLogin()
+    // Khoá điều khiển, ẩn thân người chơi và tâm ngắm trong lúc đăng nhập
+    private void LockPlayer()
     {
-        if (State == LoginViewState.RoomOverview)
-            StartCoroutine(Transition(loginAnchor, LoginViewState.LoginActive));
-    }
-
-    /// <summary>Lùi camera ra toàn cảnh quán.</summary>
-    public void GoToOverview()
-    {
-        if (State == LoginViewState.LoginActive)
-            StartCoroutine(Transition(overviewAnchor, LoginViewState.RoomOverview));
+        if (player == null && PlayerController.Instance != null) player = PlayerController.Instance.transform;
+        if (cameraTransform != null)
+        {
+            homeLocalPos = cameraTransform.localPosition;
+            homeLocalRot = cameraTransform.localRotation;
+            if (cam != null) homeFov = cam.fieldOfView;
+        }
+        if (player != null)
+        {
+            lockedScripts = new Behaviour[]
+            {
+                player.GetComponent<FirstPersonMovement>(),
+                player.GetComponent<FirstPersonLook>(),
+                player.GetComponent<FirstPersonInteract>(),
+                player.GetComponent<RaycastSource>(),
+            };
+            foreach (var b in lockedScripts) if (b != null) b.enabled = false;
+            playerRenderer = player.GetComponent<Renderer>();
+            if (playerRenderer != null) playerRenderer.enabled = false;
+        }
+        var fpc = FindFirstObjectByType<FirstPersonCanvas>(FindObjectsInactive.Include);
+        if (fpc != null) { firstPersonCanvas = fpc.gameObject; firstPersonCanvas.SetActive(false); }
     }
 
     private void UpdateHoverAndClick()
     {
         var mouse = Mouse.current;
-        if (mouse == null || cam == null || pcCollider == null) return;
+        if (mouse == null || cam == null || bartenderCollider == null) return;
 
         Ray ray = cam.ScreenPointToRay(mouse.position.ReadValue());
-        bool hit = pcCollider.Raycast(ray, out _, 50f);
-        SetHover(hit);
+        bool hit = bartenderCollider.Raycast(ray, out _, 50f);
+        if (hit != hovering) { hovering = hit; ApplyHint(); }
 
         if (hit && mouse.leftButton.wasPressedThisFrame)
-            GoToLogin();
+            StartTalk();
     }
 
-    private IEnumerator Transition(Transform target, LoginViewState finalState)
+    /// <summary>Bắt đầu nói chuyện với bartender (bấm vào bartender).</summary>
+    public void StartTalk()
+    {
+        if (State != LoginViewState.RoomOverview) return;
+        State = LoginViewState.Transitioning;
+        hovering = false;
+        ApplyHint();
+        talkRoutine = StartCoroutine(TalkRoutine());
+    }
+
+    private IEnumerator TalkRoutine()
+    {
+        if (nameText != null) nameText.text = bartenderName;
+        StartCoroutine(Fade(dialogueGroup, 0f, 1f));
+        yield return MoveCamera(talkAnchor);
+
+        for (int i = 0; i < greetLines.Length; i++)
+        {
+            yield return Say(greetLines[i]);
+            // Câu cuối không cần bấm: form hiện ngay để nhập
+            if (i < greetLines.Length - 1) yield return WaitClick();
+        }
+
+        yield return Fade(formGroup, 0f, 1f);
+        State = LoginViewState.LoginActive;
+        ApplyHint();
+    }
+
+    private void CancelTalk()
+    {
+        if (talkRoutine != null) StopCoroutine(talkRoutine);
+        talkRoutine = StartCoroutine(CancelRoutine());
+    }
+
+    private IEnumerator CancelRoutine()
+    {
+        State = LoginViewState.Transitioning;
+        ApplyHint();
+        StartCoroutine(Fade(formGroup, formGroup != null ? formGroup.alpha : 0f, 0f));
+        yield return Say(cancelLine);
+        yield return new WaitForSeconds(0.8f);
+        StartCoroutine(Fade(dialogueGroup, 1f, 0f));
+        yield return MoveCamera(overviewAnchor);
+        State = LoginViewState.RoomOverview;
+        ApplyHint();
+    }
+
+    /// <summary>Đăng nhập thành công: bartender chào rồi camera lùi ra chỗ spawn.</summary>
+    public void Welcome()
+    {
+        if (State == LoginViewState.EnteringBar || State == LoginViewState.InGame) return;
+        if (talkRoutine != null) StopCoroutine(talkRoutine);
+        talkRoutine = StartCoroutine(WelcomeRoutine());
+    }
+
+    private IEnumerator WelcomeRoutine()
+    {
+        State = LoginViewState.EnteringBar;
+        ApplyHint();
+        yield return Fade(formGroup, formGroup != null ? formGroup.alpha : 0f, 0f);
+        yield return Say(welcomeLine);
+        yield return new WaitForSeconds(1.2f);
+        yield return Fade(dialogueGroup, 1f, 0f);
+        yield return EnterBarRoutine();
+    }
+
+    private IEnumerator EnterBarRoutine()
+    {
+        Transform parent = cameraTransform.parent;
+        Vector3 p0 = cameraTransform.position;
+        Quaternion r0 = cameraTransform.rotation;
+        float f0 = cam != null ? cam.fieldOfView : homeFov;
+        Vector3 p1 = parent != null ? parent.TransformPoint(homeLocalPos) : homeLocalPos;
+        Quaternion r1 = parent != null ? parent.rotation * homeLocalRot : homeLocalRot;
+        // Điểm điều khiển nhô lên: đường bay cong qua đầu ghế/bàn thay vì cắt xuyên qua
+        Vector3 c = (p0 + p1) * 0.5f + Vector3.up * enterArcHeight;
+
+        float dur = Mathf.Max(0.5f, enterDuration);
+        for (float t = 0f; t < 1f; t += Time.deltaTime / dur)
+        {
+            if (t > 0.1f && SkipPressed()) break;
+            float k = Mathf.SmoothStep(0f, 1f, t);
+            Vector3 a = Vector3.Lerp(p0, c, k), b = Vector3.Lerp(c, p1, k);
+            cameraTransform.SetPositionAndRotation(Vector3.Lerp(a, b, k), Quaternion.Slerp(r0, r1, k));
+            if (cam != null) cam.fieldOfView = Mathf.Lerp(f0, homeFov, k);
+            yield return null;
+        }
+
+        // Trả camera về đúng chỗ của người chơi rồi mở khoá điều khiển
+        cameraTransform.localPosition = homeLocalPos;
+        cameraTransform.localRotation = homeLocalRot;
+        if (cam != null) cam.fieldOfView = homeFov;
+        if (playerRenderer != null) playerRenderer.enabled = true;
+        if (firstPersonCanvas != null) firstPersonCanvas.SetActive(true);
+        if (lockedScripts != null) foreach (var b in lockedScripts) if (b != null) b.enabled = true;
+        foreach (var go in hideWhenInGame) if (go != null) go.SetActive(false);
+        if (formGroup != null) formGroup.gameObject.SetActive(false);
+        if (CursorManager.Instance != null) CursorManager.Instance.HideCursor();
+        State = LoginViewState.InGame;
+    }
+
+    private static bool SkipPressed()
+    {
+        var kb = Keyboard.current;
+        var mouse = Mouse.current;
+        return (kb != null && kb.anyKey.wasPressedThisFrame) || (mouse != null && mouse.leftButton.wasPressedThisFrame);
+    }
+
+    private IEnumerator WaitClick()
+    {
+        yield return null; // bỏ qua frame bấm chuột trước đó
+        while (!SkipPressed()) yield return null;
+    }
+
+    // Gõ chữ dần; bấm chuột/phím để hiện hết ngay
+    private IEnumerator Say(string line)
+    {
+        if (dialogueText == null) yield break;
+        dialogueText.text = line;
+        dialogueText.maxVisibleCharacters = 0;
+        dialogueText.ForceMeshUpdate();
+        int total = dialogueText.textInfo.characterCount;
+        float shown = 0f;
+        yield return null;
+        while (shown < total)
+        {
+            if (SkipPressed()) break;
+            shown += Time.deltaTime * charsPerSecond;
+            dialogueText.maxVisibleCharacters = (int)shown;
+            yield return null;
+        }
+        dialogueText.maxVisibleCharacters = int.MaxValue;
+    }
+
+    private IEnumerator MoveCamera(Transform target)
     {
         if (target == null || cameraTransform == null) yield break;
-
-        State = LoginViewState.Transitioning;
-        SetHover(false);
-        ApplyHint();
-
-        // Form mờ đi trước khi camera rời PC
-        if (finalState == LoginViewState.RoomOverview)
-            yield return Fade(formGroup != null ? formGroup.alpha : 0f, 0f);
-
         Vector3 p0 = cameraTransform.position;
         Quaternion r0 = cameraTransform.rotation;
         for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.01f, transitionDuration))
@@ -136,42 +314,37 @@ public class LoginRoomController : MonoBehaviour
             yield return null;
         }
         cameraTransform.SetPositionAndRotation(target.position, target.rotation);
-
-        if (finalState == LoginViewState.LoginActive)
-            yield return Fade(0f, 1f);
-
-        State = finalState;
-        ApplyHint();
     }
 
-    private IEnumerator Fade(float from, float to)
+    private IEnumerator Fade(CanvasGroup g, float from, float to)
     {
-        if (formGroup == null) yield break;
+        if (g == null) yield break;
 
         // Chỉ nhận chuột khi đã hiện rõ
-        formGroup.interactable = false;
-        formGroup.blocksRaycasts = false;
+        g.interactable = false;
+        g.blocksRaycasts = false;
         for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.01f, fadeDuration))
         {
-            formGroup.alpha = Mathf.Lerp(from, to, t);
+            g.alpha = Mathf.Lerp(from, to, t);
             yield return null;
         }
-        SetForm(to);
+        SetGroup(g, to);
     }
 
-    private void SetForm(float alpha)
+    private static void SetGroup(CanvasGroup g, float alpha)
     {
-        if (formGroup == null) return;
-        formGroup.alpha = alpha;
+        if (g == null) return;
+        g.alpha = alpha;
         bool on = alpha >= 0.99f;
-        formGroup.interactable = on;
-        formGroup.blocksRaycasts = on;
+        g.interactable = on;
+        g.blocksRaycasts = on;
     }
 
     private void SnapTo(Transform anchor)
     {
         if (anchor != null && cameraTransform != null)
             cameraTransform.SetPositionAndRotation(anchor.position, anchor.rotation);
+        if (cam != null) cam.fieldOfView = introFov;
     }
 
     private void Sway()
@@ -182,24 +355,16 @@ public class LoginRoomController : MonoBehaviour
         cameraTransform.position = overviewAnchor.position + offset;
     }
 
-    private void SetHover(bool on)
-    {
-        hovering = on;
-        if (screenMat != null)
-            screenMat.SetColor("_EmissionColor", on ? screenHover : screenIdle);
-        ApplyHint();
-    }
-
     private void ApplyHint()
     {
         if (hintText == null) return;
         switch (State)
         {
             case LoginViewState.RoomOverview:
-                hintText.text = hovering ? "Nhấp để ngồi vào máy tính" : "Nhấp vào máy tính để đăng nhập";
+                hintText.text = hovering ? "Nhấp để nói chuyện với bartender" : "Nhấp vào bartender để bắt chuyện";
                 break;
             case LoginViewState.LoginActive:
-                hintText.text = "[Esc] Quay lại quán";
+                hintText.text = "[Esc] Quay lại";
                 break;
             default:
                 hintText.text = "";

@@ -118,6 +118,14 @@ public class TableLobbyUI : MonoBehaviour
         if (lobbyPanel != null) lobbyPanel.SetActive(false);
     }
 
+    // Update gọi UpdateLobbyUI mỗi frame: chỉ gán text khi đổi để TMP không dựng lại mesh liên tục
+    private static void SetTxt(TMP_Text t, string s)
+    {
+        if (t != null && !string.Equals(t.text, s)) t.text = s;
+    }
+
+    private Canvas lobbyCanvas;
+
     public void UpdateLobbyUI()
     {
         var session = TableSessionManager.Instance;
@@ -129,7 +137,8 @@ public class TableLobbyUI : MonoBehaviour
         // Đảm bảo Canvas cha luôn bật nếu cần hiển thị
         if (lobbyPanel != null)
         {
-            var parentCanvas = lobbyPanel.GetComponentInParent<Canvas>(true);
+            if (lobbyCanvas == null) lobbyCanvas = lobbyPanel.GetComponentInParent<Canvas>(true);
+            var parentCanvas = lobbyCanvas;
             if (parentCanvas != null && !parentCanvas.gameObject.activeSelf)
             {
                 parentCanvas.gameObject.SetActive(true);
@@ -156,11 +165,11 @@ public class TableLobbyUI : MonoBehaviour
         // 1. Header
         if (titleText != null)
         {
-            titleText.text = $"♠ LIARS CARD - PHÒNG CHỜ BÀN SỐ {session.currentTableId} ♠";
+            SetTxt(titleText, $"Bàn {session.currentTableId}");
         }
         if (subTitleText != null)
         {
-            subTitleText.text = $"Ghế của bạn: <b>Ghế {session.currentSeatIndex}</b> | Trạng thái: <color=#FFD700>ĐANG CHỜ BẮT ĐẦU</color>";
+            SetTxt(subTitleText, $"Ghế của bạn: <b>Ghế {session.currentSeatIndex}</b> | Trạng thái: <color=#FFD700>ĐANG CHỜ BẮT ĐẦU</color>");
         }
 
         // 2. Danh sách ghế
@@ -184,22 +193,22 @@ public class TableLobbyUI : MonoBehaviour
                         string title = $"<b>Ghế {seat.seatIndex}:</b> ";
                         if (isHost) title += "<color=#FFD700>[CHỦ BÀN]</color> ";
                         if (isMe) title += "<color=#00FFFF>(Bạn)</color> ";
-                        row.seatTitleText.text = title;
+                        SetTxt(row.seatTitleText, title);
                     }
 
                     if (string.IsNullOrEmpty(seat.playerId))
                     {
-                        if (row.playerIdText != null) row.playerIdText.text = "<color=#888888><i>(Còn trống)</i></color>";
-                        if (row.readyBadgeText != null) row.readyBadgeText.text = "";
+                        if (row.playerIdText != null) SetTxt(row.playerIdText, "<color=#888888><i>(Còn trống)</i></color>");
+                        if (row.readyBadgeText != null) SetTxt(row.readyBadgeText, "");
                     }
                     else
                     {
                         string idShort = seat.playerId.Length > 12 ? seat.playerId.Substring(0, 12) + "..." : seat.playerId;
-                        if (row.playerIdText != null) row.playerIdText.text = $"ID: {idShort}";
+                        if (row.playerIdText != null) SetTxt(row.playerIdText, $"ID: {idShort}");
 
                         if (row.readyBadgeText != null)
                         {
-                            row.readyBadgeText.text = seat.isReady ? "<color=#2ECC71><b>✔ ĐÃ SẴN SÀNG</b></color>" : "<color=#E67E22><b>⏳ Chưa Ready</b></color>";
+                            SetTxt(row.readyBadgeText, seat.isReady ? "<color=#2ECC71><b>✔ ĐÃ SẴN SÀNG</b></color>" : "<color=#E67E22><b>⏳ Chưa Ready</b></color>");
                         }
                     }
                 }
@@ -209,7 +218,7 @@ public class TableLobbyUI : MonoBehaviour
         // 3. Nút Sẵn sàng / Hủy sẵn sàng
         if (readyButtonText != null)
         {
-            readyButtonText.text = myReadyState ? "<b>HỦY SẴN SÀNG</b>" : "<b>SẴN SÀNG (READY)</b>";
+            SetTxt(readyButtonText, myReadyState ? "<b>HỦY SẴN SÀNG</b>" : "<b>SẴN SÀNG (READY)</b>");
         }
         if (readyButtonBg != null)
         {
@@ -229,7 +238,7 @@ public class TableLobbyUI : MonoBehaviour
                 if (startButtonText != null)
                 {
                     string hint = (table != null && table.playerCount < 2) ? "Cần >= 2 người" : "Đợi mọi người Ready";
-                    startButtonText.text = canStart ? "<b>BẮT ĐẦU TRẬN ĐẤU</b>" : $"Bắt đầu ({hint})";
+                    SetTxt(startButtonText, canStart ? "<b>BẮT ĐẦU TRẬN ĐẤU</b>" : $"Bắt đầu ({hint})");
                 }
                 if (startButtonBg != null)
                 {
@@ -241,7 +250,7 @@ public class TableLobbyUI : MonoBehaviour
         // 5. Status Text
         if (statusText != null)
         {
-            statusText.text = statusMessage;
+            SetTxt(statusText, statusMessage);
         }
     }
 
