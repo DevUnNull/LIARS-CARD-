@@ -23,6 +23,11 @@ public class RemotePlayerManager : Singleton<RemotePlayerManager>
         remote.SetPositionAndRotation(position, Quaternion.Euler(0f, rotationY, 0f));
     }
 
+    public bool TryGetRemote(string playerId, out Transform remote)
+    {
+        return remotePlayers.TryGetValue(playerId ?? "", out remote) && remote != null;
+    }
+
     public void RemoveRemotePlayer(string playerId)
     {
         if (!remotePlayers.TryGetValue(playerId, out Transform remote))

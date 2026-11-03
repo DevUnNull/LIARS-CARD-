@@ -135,6 +135,7 @@ public class CardBattleUI : MonoBehaviour
         if (GetComponent<CardHand3D>() == null) gameObject.AddComponent<CardHand3D>();
         if (GetComponent<CardAudioSystem>() == null) gameObject.AddComponent<CardAudioSystem>();
         if (GetComponent<TableCenterPile3D>() == null) gameObject.AddComponent<TableCenterPile3D>();
+        if (GetComponent<CardDealAnimator>() == null) gameObject.AddComponent<CardDealAnimator>();
         if (FindAnyObjectByType<TableDeck3D>() == null)
         {
             var deckObj = new GameObject("[TableDeck3D]");
@@ -273,7 +274,14 @@ public class CardBattleUI : MonoBehaviour
             try { isLeftMouseDown = Input.GetMouseButton(0); } catch { }
         }
 
-        // Bóp cò bằng cách GIỮ chuột trái (hoặc click nút GUI)
+        // Có súng 3D: chờ súng lên đạn xong rồi CLICK chuột trái 1 lần là bóp cò ("tạch")
+        if (RevolverGun.Instance != null)
+        {
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame && RevolverGun.Instance.IsReadyToFire) ExecuteTriggerPull();
+            return;
+        }
+
+        // Không có súng 3D (fallback): bóp cò bằng cách GIỮ chuột trái (hoặc click nút GUI)
         if (isLeftMouseDown)
         {
             triggerHoldProgress += Time.deltaTime / TRIGGER_HOLD_TIME;
@@ -310,7 +318,7 @@ public class CardBattleUI : MonoBehaviour
             onSuccess: res =>
             {
                 stateVersion = res.stateVersion;
-                OnTriggerResultReceived(res.penalizedPlayerId, res.isBulletHit, res.survived, res.eliminated, res.nextPhase, res.winnerPlayerId);
+                OnTriggerResultReceived(res.penalizedPlayerId, res.isBulletHit, res.survived, res.eliminated, res.nextPhase, res.winnerPlayerId, res.shotNumber);
             },
             onError: err =>
             {
@@ -333,6 +341,9 @@ public class CardBattleUI : MonoBehaviour
         showPenaltyModal = true;
         pendingWinnerId = null;
 
+        // Người bị phạt nhấc súng trên bàn lên, lên đạn và dí vào đầu (mọi người đều thấy)
+        if (RevolverGun.Instance != null) RevolverGun.Instance.BeginPenalty(penalizedId);
+
         if (challengeSucceeded)
         {
             penaltyTitle = "<color=#2ECC71><b>BẮT LÁO ĐÚNG! ĐỐI THỦ ĐÃ NÓI DỐI!</b></color>";
@@ -344,7 +355,7 @@ public class CardBattleUI : MonoBehaviour
 
         if (isPenalizedPlayer)
         {
-            statusMessage = "<color=red><b>BẠN BỊ PHẠT! GIỮ CHUỘT TRÁI ĐỂ TỰ BÓP CÒ VÀO ĐẦU!</b></color>";
+            statusMessage = "<color=red><b>BẠN BỊ PHẠT! CHỜ LÊN ĐẠN RỒI CLICK CHUỘT TRÁI ĐỂ BÓP CÒ VÀO ĐẦU!</b></color>";
         }
         else
         {
@@ -354,7 +365,7 @@ public class CardBattleUI : MonoBehaviour
         UpdateUGUI();
     }
 
-    public void OnTriggerResultReceived(string victimId, bool isBulletHit, bool survived, bool eliminated, string nextPhase, string winnerId)
+    public void OnTriggerResultReceived(string victimId, bool isBulletHit, bool survived, bool eliminated, string nextPhase, string winnerId, int shotNumber = 0)
     {
         awaitingTriggerPull = false;
         showPenaltyModal = true;
@@ -364,8 +375,12 @@ public class CardBattleUI : MonoBehaviour
         bool isMe = !string.IsNullOrEmpty(myId) && string.Equals(victimId, myId, StringComparison.OrdinalIgnoreCase);
         string victimName = isMe ? "BẠN" : $"[{victimId}]";
 
-        // Phát âm thanh súng nổ hoặc cạch khô
-        if (CardAudioSystem.Instance != null)
+        // Súng 3D tự phát âm thanh + animation đoàng/tạch; chỉ phát tiếng ở đây khi không có súng 3D
+        if (RevolverGun.Instance != null)
+        {
+            RevolverGun.Instance.ResolveShot(victimId, isBulletHit, shotNumber);
+        }
+        else if (CardAudioSystem.Instance != null)
         {
             string sfxName = isBulletHit ? "Gunshot" : "DryFire";
             CardAudioSystem.Instance.PlaySpatialSfx(sfxName, transform.position);
@@ -374,7 +389,8 @@ public class CardBattleUI : MonoBehaviour
         if (eliminated)
         {
             penaltyModalTimer = 4.0f; // Hiện kết quả phạt súng trong 4.0s
-            penaltyDetail = $"💥 <b>ĐOÀNG! BÙM!</b> Ổ đạn nổ tung sọ!\n<color=red><b>{victimName} ĐÃ BỊ LOẠI KHỎI TRẬN ĐẤU!</b></color>";
+            string shotInfo = shotNumber > 0 ? $" (phát {shotNumber}/6)" : "";
+            penaltyDetail = $"💥 <b>ĐOÀNG! BÙM!</b>{shotInfo} Ổ đạn nổ tung sọ!\n<color=red><b>{victimName} ĐÃ BỊ LOẠI KHỎI TRẬN ĐẤU!</b></color>";
 
             if (!string.IsNullOrEmpty(winnerId))
             {
@@ -392,7 +408,8 @@ public class CardBattleUI : MonoBehaviour
         else
         {
             penaltyModalTimer = 3.5f; // Hiện kết quả sống sót trong 3.5s
-            penaltyDetail = $"💨 <b>*CẠCH!*</b> Cò súng gõ vào ổ đạn rỗng!\n<color=green><b>{victimName} MAY MẮN SỐNG SÓT! (PHEW)</b></color>";
+            string shotInfo = shotNumber > 0 ? $" (phát {shotNumber}/6)" : "";
+            penaltyDetail = $"💨 <b>*CẠCH!*</b>{shotInfo} Cò súng gõ vào ổ đạn rỗng!\n<color=green><b>{victimName} MAY MẮN SỐNG SÓT! (PHEW)</b></color>";
             pendingWinnerId = null;
         }
 
@@ -465,6 +482,11 @@ public class CardBattleUI : MonoBehaviour
         {
             TableCenterPile3D.Instance.ClearPile();
         }
+        if (RevolverGun.Instance != null) RevolverGun.Instance.ResetToTable();
+        RemoteHands.Instance.Clear();
+
+        // Animation chia bài cho từng người theo hướng ghế (bài trên tay chỉ hiện sau khi chia xong)
+        if (CardDealAnimator.Instance != null) CardDealAnimator.Instance.PlayDeal();
 
         var auth = AuthApiClient.Instance;
         if (auth == null || string.IsNullOrEmpty(auth.AccessToken)) return;
@@ -509,6 +531,8 @@ public class CardBattleUI : MonoBehaviour
         {
             TableCenterPile3D.Instance.ClearPile();
         }
+        if (RevolverGun.Instance != null) RevolverGun.Instance.ResetToTable();
+        RemoteHands.Instance.Clear();
 
         if (matchPollCoroutine != null)
         {
@@ -544,10 +568,12 @@ public class CardBattleUI : MonoBehaviour
         tableRank = res.tableRank;
         currentTurnPlayerId = res.currentTurnPlayerId;
         stateVersion = res.stateVersion;
+        bool hadLastPlay = lastPlay != null && !string.IsNullOrEmpty(lastPlay.playId);
         lastPlay = res.lastPlay;
+        bool hasLastPlay = lastPlay != null && !string.IsNullOrEmpty(lastPlay.playId);
 
-        // Nếu qua round mới: dọn dẹp chồng bài cũ trên bàn
-        if (roundNumber > oldRound)
+        // Qua round mới, hoặc bắn trượt (cùng round nhưng lượt đánh trước đã bị dọn): dọn chồng bài cũ trên bàn
+        if (roundNumber > oldRound || (hadLastPlay && !hasLastPlay))
         {
             if (TableCenterPile3D.Instance != null)
             {
@@ -571,6 +597,8 @@ public class CardBattleUI : MonoBehaviour
         string myId = TableSessionManager.Instance != null ? TableSessionManager.Instance.MyPlayerId : "";
         var myPublicState = res.players?.Find(p => string.Equals(p.playerId, myId, System.StringComparison.OrdinalIgnoreCase));
         bool isMeDead = myPublicState != null && !myPublicState.isAlive;
+        RemoteHands.Instance.SyncCounts(res.players, myId);
+        RemoteHands.Instance.SyncShots(res.players, myId);   // bài trên tay người khác (hiển thị 3D)
         bool hasMatchEnded = !string.IsNullOrEmpty(res.winnerPlayerId) || res.phase == "MatchEnded" || !string.IsNullOrEmpty(winnerPlayerId);
 
         // Đồng bộ trạng thái phạt từ Polling Server nếu gói UDP bị trễ (TUYỆT ĐỐI KHÔNG kích hoạt nếu người chơi đã chết hoặc trận đã kết thúc)
@@ -612,7 +640,11 @@ public class CardBattleUI : MonoBehaviour
                 // Đồng bộ sang hệ thống bài 3D
                 if (CardHand3D.Instance != null)
                 {
-                    CardHand3D.Instance.SyncHand(myCards);
+                    var cardsSnapshot = new List<CardDto>(myCards);
+                    CardDealAnimator.WhenIdle(() =>
+                    {
+                        if (CardHand3D.Instance != null) CardHand3D.Instance.SyncHand(cardsSnapshot);
+                    });
                 }
 
                 UpdateUGUI();
@@ -739,7 +771,8 @@ public class CardBattleUI : MonoBehaviour
         // 1. Russian Roulette Modal
         if (russianRouletteModal != null)
         {
-            bool showRR = inBattle && showPenaltyModal;
+            // Có súng 3D thì không cần panel nữa, chỉ hiện thông báo (statusMessage) ở HUD
+            bool showRR = inBattle && showPenaltyModal && RevolverGun.Instance == null;
             if (russianRouletteModal.activeSelf != showRR) russianRouletteModal.SetActive(showRR);
 
             if (showRR)
@@ -889,13 +922,24 @@ public class CardBattleUI : MonoBehaviour
 
                 if (hudHintText != null)
                 {
-                    if (IsMyTurn)
+                    int myShot = RemoteHands.Instance.GetMyShot();
+                    string myShotInfo = myShot > 0 ? $"   |   Súng của bạn: <color=#FFE680><b>{myShot}/6</b></color>" : "";
+                    if (showPenaltyModal && RevolverGun.Instance != null)
                     {
-                        hudHintText.text = "<b>ĐẾN LƯỢT:</b> [A/D]: CHỌN LÁ | [SPACE]: CHỌN/BỎ LÁ (TỐI ĐA 3) | [E]: ĐÁNH BÀI | [X]: BẮT LÁO";
+                        // Thay panel bằng thông báo: người bị phạt thấy hướng dẫn, người khác thấy đang chờ
+                        string victim = !string.IsNullOrEmpty(penalizedPlayerId) ? penalizedPlayerId : "Đối thủ";
+                        hudHintText.text = !awaitingTriggerPull ? penaltyDetail
+                            : isPenalizedPlayer ? "<color=red><b>BẠN BỊ PHẠT!</b></color> Chờ lên đạn rồi CLICK CHUỘT TRÁI để bóp cò"
+                            : $"<color=yellow>[{victim}] đang dí súng vào đầu...</color>";
+                        hudHintText.text += myShotInfo;
+                    }
+                    else if (IsMyTurn)
+                    {
+                        hudHintText.text = "<b>ĐẾN LƯỢT:</b> [A/D]: CHỌN LÁ | [SPACE]: CHỌN/BỎ LÁ (TỐI ĐA 3) | [E]: ĐÁNH BÀI | [X]: BẮT LÁO" + myShotInfo;
                     }
                     else
                     {
-                        hudHintText.text = "<b>NGOÀI LƯỢT:</b> [GIỮ SPACE]: HÉ BÀI XEM | [CHUỘT]: QUAN SÁT | [X]: BẮT LÁO";
+                        hudHintText.text = "<b>NGOÀI LƯỢT:</b> [GIỮ SPACE]: HÉ BÀI XEM | [CHUỘT]: QUAN SÁT | [X]: BẮT LÁO" + myShotInfo;
                     }
                 }
             }

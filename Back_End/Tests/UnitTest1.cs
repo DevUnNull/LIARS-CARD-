@@ -818,7 +818,7 @@ namespace Back_End.Tests
 
             Assert.Equal(p1Id, pullRes.PenalizedPlayerId);
             Assert.True(pullRes.Survived);
-            Assert.Equal("RoundStart", pullRes.NextPhase);
+            Assert.Equal("AwaitPlayOrChallenge", pullRes.NextPhase);
             Assert.Equal(1, p1.Revolver.PullsCount);
         }
     }

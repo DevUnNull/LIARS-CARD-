@@ -11,7 +11,7 @@ namespace LiarsCard.Editor
         [MenuItem("Liars Card/Setup SampleScene Full Gameplay Now")]
         public static void SetupScene()
         {
-            string scenePath = "Assets/_Scenes/SampleScene.unity";
+            string scenePath = "Assets/_Scenes/MainScene.unity";
             var currentScene = EditorSceneManager.GetActiveScene();
 
             if (currentScene.path != scenePath)

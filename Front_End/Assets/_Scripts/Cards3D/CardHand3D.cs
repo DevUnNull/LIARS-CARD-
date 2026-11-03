@@ -299,6 +299,10 @@ namespace LiarsCard.Cards3D
             if (visualState == newVisualState) return;
             visualState = newVisualState;
 
+            // Cho những người khác thấy mình nhấc bài lên xem / hạ xuống
+            if (NetworkManager.Instance != null)
+                NetworkManager.Instance.SendHandAction((byte)(visualState == HandVisualState.Peeking ? 1 : 0));
+
             if (visualState == HandVisualState.Peeking)
             {
                 if (CardAudioSystem.Instance != null) CardAudioSystem.Instance.PlayShuffle();
@@ -466,6 +470,10 @@ namespace LiarsCard.Cards3D
             var pile = TableCenterPile3D.Instance;
             if (CardAudioSystem.Instance != null) CardAudioSystem.Instance.PlayThrow();
 
+            // Cho những người khác thấy các lá bài bay vào chồng bài
+            if (NetworkManager.Instance != null && thrownCards.Count > 0)
+                NetworkManager.Instance.SendHandAction(2, (byte)Mathf.Min(thrownCards.Count, 3));
+
             int completedCount = 0;
             for (int i = 0; i < thrownCards.Count; i++)
             {
@@ -496,7 +504,7 @@ namespace LiarsCard.Cards3D
         private IEnumerator DelayedThrow(CardVisual3D card, Vector3 targetPos, Quaternion targetRot, float delay, Action onArrived)
         {
             if (delay > 0f) yield return new WaitForSeconds(delay);
-            card.AnimateFlyToWorld(targetPos, targetRot, 0.42f, onArrived);
+            card.AnimateFlyToWorld(targetPos, targetRot, 0.42f, onArrived, TableCenterPile3D.TableCardScale);
         }
 
         #endregion

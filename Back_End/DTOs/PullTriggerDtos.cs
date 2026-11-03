@@ -22,5 +22,7 @@ namespace Back_End.DTOs
         public string? WinnerPlayerId { get; set; }
         public int StateVersion { get; set; }
         public string? PenaltyEventId { get; set; }
+        /// <summary>Số phát vừa bóp (1..6), hiển thị dạng X/6.</summary>
+        public int ShotNumber { get; set; }
     }
 }

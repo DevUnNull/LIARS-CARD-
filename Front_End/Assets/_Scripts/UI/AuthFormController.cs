@@ -105,7 +105,7 @@ public class AuthFormController : MonoBehaviour
                 loginButton.interactable = true;
                 isBusy = false;
 
-                SceneManager.LoadScene("SampleScene");
+                SceneManager.LoadScene("MainScene");
                 yield break;
             }
         }

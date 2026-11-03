@@ -12,12 +12,13 @@ namespace LiarsCard.Cards3D
         public static TableDeck3D Instance { get; private set; }
 
         [Header("Deck Dimensions")]
-        public float deckWidth = 0.072f;      // 7.2 cm
-        public float deckLength = 0.115f;    // 11.5 cm
-        public float deckHeight = 0.018f;    // 1.8 cm (~52 playing cards stack)
+        // Cùng tỉ lệ với lá bài trên bàn (TableCardScale = 2x bài cầm tay)
+        public float deckWidth = 0.072f * TableCenterPile3D.TableCardScale;
+        public float deckLength = 0.115f * TableCenterPile3D.TableCardScale;
+        public float deckHeight = 0.018f * TableCenterPile3D.TableCardScale;
 
         [Header("Offset relative to Table Center")]
-        public Vector3 offsetFromCenter = new Vector3(0.38f, 0f, 0.25f);
+        public Vector3 offsetFromCenter = new Vector3(0.6f, 0f, 0.4f);
         public float rotationAngle = 18f;
 
         private GameObject deckModel;
@@ -37,15 +38,8 @@ namespace LiarsCard.Cards3D
         {
             if (deckModel != null) Destroy(deckModel);
 
-            Vector3 tablePos = new Vector3(-1.75f, 0.75f, -5f);
-            float tableTopY = 1.503f;
-
-            var tableObj = GameObject.Find("Table");
-            if (tableObj != null)
-            {
-                tablePos = tableObj.transform.position;
-                tableTopY = tableObj.transform.position.y + (tableObj.transform.localScale.y * 0.5f) + 0.003f;
-            }
+            Vector3 tablePos = TableCenterPile3D.GetTableTopCenter();
+            float tableTopY = tablePos.y + 0.003f;
 
             Vector3 deckPosition = new Vector3(
                 tablePos.x + offsetFromCenter.x,

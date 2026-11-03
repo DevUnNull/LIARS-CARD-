@@ -100,14 +100,17 @@ namespace Back_End.Services
                 bool survived = !isBulletHit;
                 bool eliminated = isBulletHit;
 
+                int shotNumber = player.Revolver.LastShotNumber;
+
                 if (eliminated)
                 {
                     player.IsAlive = false;
                     player.Hand.Clear(); // Xóa bài của người chơi đã chết
+                    ResetRevolvers(match); // Trúng đạn: súng được nạp lại (đạn vị trí mới, đếm lại từ 1/6) cho round mới
                 }
 
                 var alivePlayers = match.AlivePlayers;
-                string nextPhase = (alivePlayers.Count <= 1) ? "MatchEnded" : "RoundStart";
+                string nextPhase = (alivePlayers.Count <= 1) ? "MatchEnded" : (survived ? "AwaitPlayOrChallenge" : "RoundStart");
                 string? winnerPlayerId = (alivePlayers.Count <= 1) ? alivePlayers.FirstOrDefault()?.PlayerId : null;
 
                 // Ghi nhận penalty event cho Animation ACK & Timeout
@@ -133,7 +136,8 @@ namespace Back_End.Services
                     survived,
                     eliminated,
                     nextPhase,
-                    winnerPlayerId);
+                    winnerPlayerId,
+                    shotNumber);
 
                 var response = new PullTriggerResponse
                 {
@@ -145,7 +149,8 @@ namespace Back_End.Services
                     NextPhase = nextPhase,
                     WinnerPlayerId = winnerPlayerId,
                     StateVersion = match.StateVersion,
-                    PenaltyEventId = penaltyEventId
+                    PenaltyEventId = penaltyEventId,
+                    ShotNumber = shotNumber
                 };
 
                 // Persist state & action history
@@ -157,6 +162,13 @@ namespace Back_End.Services
 
                 return response;
             }
+        }
+
+        /// <summary>Nạp lại súng của mọi người còn sống: đạn ở vị trí ngẫu nhiên mới, phát bắn đếm lại từ 1.</summary>
+        private static void ResetRevolvers(GameMatch match)
+        {
+            foreach (var p in match.AlivePlayers)
+                p.Revolver = new PlayerRevolver();
         }
 
         private void ScheduleTimeoutFallback(string matchId, string penaltyEventId, int timeoutMs)
@@ -242,9 +254,19 @@ namespace Back_End.Services
             }
             else
             {
-                // Vẫn còn ít nhất 2 người sống sót -> Bắt đầu vòng mới
-                match.PenalizedPlayerId = null;
-                _deckRoundService.StartRound(match);
+                // Vẫn còn ít nhất 2 người sống sót.
+                // Bắn trượt (đã bóp cò, người đó còn sống): giữ nguyên bài, chỉ chuyển lượt.
+                // Bắn trúng (có người bị loại): chia lại bài hoàn toàn mới.
+                var shooter = match.PenalizedPlayerId != null ? match.FindPlayer(match.PenalizedPlayerId) : null;
+                if (match.PenaltyResolved && shooter != null && shooter.IsAlive)
+                {
+                    _deckRoundService.ContinueRoundAfterMiss(match, shooter.PlayerId);
+                }
+                else
+                {
+                    match.PenalizedPlayerId = null;
+                    _deckRoundService.StartRound(match);
+                }
             }
         }
 
@@ -267,10 +289,13 @@ namespace Back_End.Services
             bool survived = !isBulletHit;
             bool eliminated = isBulletHit;
 
+            int shotNumber = player.Revolver.LastShotNumber;
+
             if (eliminated)
             {
                 player.IsAlive = false;
                 player.Hand.Clear(); // Clear dead player hand
+                ResetRevolvers(match);
             }
 
             // Check alive players
@@ -301,11 +326,20 @@ namespace Back_End.Services
             }
             else
             {
-                match.PenalizedPlayerId = null;
                 match.RoundTransitionHandled = true;
-                // Start next round with living players
-                _deckRoundService.StartRound(match);
-                nextPhase = "RoundStart";
+                if (survived)
+                {
+                    // Bắn trượt: giữ nguyên bài, chuyển lượt
+                    _deckRoundService.ContinueRoundAfterMiss(match, penalizedPlayerId);
+                    nextPhase = "AwaitPlayOrChallenge";
+                }
+                else
+                {
+                    // Bắn trúng: chia lại bài mới cho người còn sống
+                    match.PenalizedPlayerId = null;
+                    _deckRoundService.StartRound(match);
+                    nextPhase = "RoundStart";
+                }
             }
 
             string soundName = isBulletHit ? "Gunshot" : "DryFire";
@@ -318,7 +352,8 @@ namespace Back_End.Services
                 survived,
                 eliminated,
                 nextPhase,
-                match.WinnerPlayerId);
+                match.WinnerPlayerId,
+                shotNumber);
 
             return new PenaltyResult
             {

@@ -38,6 +38,7 @@ namespace Back_End.Services
                     PlayerId = p.PlayerId,
                     IsAlive = p.IsAlive,
                     RemainingCardCount = p.RemainingCardCount,
+                    ShotCount = p.Revolver.CurrentChamber + 1,
                     IsConnected = p.IsConnected
                 }).ToList()
             };

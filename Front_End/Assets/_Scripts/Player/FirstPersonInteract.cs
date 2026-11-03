@@ -90,6 +90,7 @@ public class FirstPersonInteract : MonoBehaviour
 
                 Debug.Log("Leave sit.");
                 PlayerController.Instance.firstPersonMovement.enabled = true;
+                PlayerController.Instance.firstPersonLook.RestoreFov();
 
                 if (TableSessionManager.Instance != null)
                 {

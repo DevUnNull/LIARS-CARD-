@@ -15,6 +15,8 @@ namespace Back_End.Infrastructure.MatchState
     public interface IMatchStore
     {
         GameMatch? GetMatch(string matchId);
+        /// <summary>Trận đang diễn ra (chưa kết thúc) mà người chơi này tham gia; null nếu không có.</summary>
+        GameMatch? FindActiveMatchByPlayer(string playerId);
         void SaveMatch(GameMatch match);
         bool DeleteMatch(string matchId);
         Task<IDisposable> LockMatchAsync(string matchId);

@@ -26,6 +26,27 @@ namespace Back_End.Services
         }
 
         /// <summary>
+        /// Bắn trượt (người bóp cò còn sống): KHÔNG chia lại bài. Giữ nguyên bài trên tay và rank bàn,
+        /// xoá lượt đánh trước và chuyển lượt cho người kế tiếp còn bài. Không còn ai có bài thì chia vòng mới.
+        /// </summary>
+        public void ContinueRoundAfterMiss(GameMatch match, string shooterPlayerId)
+        {
+            match.PenalizedPlayerId = null;
+            match.LastPlay = null;
+
+            var next = _turnStateMachine.GetNextTurnPlayer(match, shooterPlayerId);
+            if (next == null)
+            {
+                StartRound(match);
+                return;
+            }
+
+            match.CurrentTurnPlayerId = next.PlayerId;
+            match.Phase = RoundPhase.AwaitPlayOrChallenge;
+            match.StateVersion++;
+        }
+
+        /// <summary>
         /// Starts a new round in the match:
         /// 1. Identifies alive players
         /// 2. Creates and shuffles 20-card deck

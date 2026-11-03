@@ -141,6 +141,28 @@ public class NetworkManager : Singleton<NetworkManager>
                             break;
                         }
 
+                    case 13: // Tư thế súng của người bị phạt (server chuyển tiếp): holderId, stage, pitch
+                        {
+                            string holderId = reader.GetString();
+                            byte stage = reader.GetByte();
+                            float pitch = reader.GetFloat();
+
+                            var gun = RevolverGun.Instance;
+                            if (gun != null) gun.OnRemoteGunPose(holderId, stage, pitch);
+                            break;
+                        }
+
+                    case 14: // Hành động bài trên tay của người khác: playerId, action (0 hạ, 1 nhấc xem, 2 đánh), count
+                        {
+                            string handPlayerId = reader.GetString();
+                            byte action = reader.GetByte();
+                            byte count = reader.GetByte();
+
+                            if (action == 2) RemoteHands.Instance.PlayCards(handPlayerId, count);
+                            else RemoteHands.Instance.SetPeek(handPlayerId, action == 1);
+                            break;
+                        }
+
                     case 12: // Trigger Result Broadcast
                         {
                             string penalizedPlayerId = reader.GetString();
@@ -149,11 +171,12 @@ public class NetworkManager : Singleton<NetworkManager>
                             bool eliminated = reader.GetBool();
                             string nextPhase = reader.GetString();
                             string winnerPlayerId = reader.GetString();
+                            int shotNumber = reader.AvailableBytes >= 1 ? reader.GetByte() : 0;
 
                             var battleUI = CardBattleUI.Instance;
                             if (battleUI != null)
                             {
-                                battleUI.OnTriggerResultReceived(penalizedPlayerId, isBulletHit, survived, eliminated, nextPhase, winnerPlayerId);
+                                battleUI.OnTriggerResultReceived(penalizedPlayerId, isBulletHit, survived, eliminated, nextPhase, winnerPlayerId, shotNumber);
                             }
                             break;
                         }
@@ -318,6 +341,36 @@ public class NetworkManager : Singleton<NetworkManager>
         writer.Put(rotationY);
 
         serverPeer.Send(writer, DeliveryMethod.Sequenced);
+    }
+
+    /// <summary>Người bị phạt gửi tư thế súng (stage 1 = nhấc, 2 = dí vào đầu; pitch = độ cúi đầu) để server chuyển cho cả bàn.</summary>
+    public void SendGunPose(byte stage, float pitch)
+    {
+        if (!IsConnected)
+            return;
+
+        var writer = new NetDataWriter();
+
+        writer.Put((byte)4);
+        writer.Put(stage);
+        writer.Put(pitch);
+
+        serverPeer.Send(writer, DeliveryMethod.Sequenced);
+    }
+
+    /// <summary>Báo cho cả bàn thấy mình hạ bài (0), nhấc bài lên xem (1) hoặc đánh `count` lá (2).</summary>
+    public void SendHandAction(byte action, byte count = 0)
+    {
+        if (!IsConnected)
+            return;
+
+        var writer = new NetDataWriter();
+
+        writer.Put((byte)5);
+        writer.Put(action);
+        writer.Put(count);
+
+        serverPeer.Send(writer, DeliveryMethod.ReliableOrdered);
     }
 
     public void Disconnect()

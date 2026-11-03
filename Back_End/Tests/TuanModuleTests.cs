@@ -470,6 +470,7 @@ namespace Back_End.Tests
             match.Phase = RoundPhase.PenaltyResolution;
             match.PenalizedPlayerId = "player_01";
             var p1 = match.FindPlayer("player_01")!;
+            int handBefore = p1.Hand.Count;
             p1.Revolver = new PlayerRevolver(bulletChamber: 5, currentChamber: 0); // survives
             h.Store.SaveMatch(match);
 
@@ -485,8 +486,37 @@ namespace Back_End.Tests
                 PenaltyEventId = pullRes.PenaltyEventId!
             });
 
-            Assert.Equal(roundBefore + 1, match.RoundNumber);
+            // Bắn trượt: KHÔNG chia lại bài, vẫn cùng round, lượt chuyển sang người kế tiếp
+            Assert.Equal(roundBefore, match.RoundNumber);
             Assert.Equal(RoundPhase.AwaitPlayOrChallenge, match.Phase);
+            Assert.Equal("player_02", match.CurrentTurnPlayerId);
+            Assert.Equal(handBefore, p1.Hand.Count);
+        }
+
+        [Fact]
+        public async Task Miss_KeepsHands_Hit_RedealsForSurvivors()
+        {
+            var h = TestHarness.Create();
+            var match = CreateMatchWithPlayers(h, 3);
+            var p1 = match.FindPlayer("player_01")!;
+            var p2 = match.FindPlayer("player_02")!;
+            var handIds = p2.Hand.Select(c => c.CardInstanceId).ToList();
+            int round = match.RoundNumber;
+
+            match.Phase = RoundPhase.PenaltyResolution;
+            match.PenalizedPlayerId = "player_01";
+            p1.Revolver = new PlayerRevolver(bulletChamber: 0, currentChamber: 0); // trúng đạn
+            h.Store.SaveMatch(match);
+
+            var res = await h.PenaltyService.PullTriggerAsync(match.MatchId, "player_01", new PullTriggerRequest
+            {
+                ActionId = Guid.NewGuid(),
+                ExpectedVersion = match.StateVersion
+            });
+
+            Assert.True(res.Eliminated);
+            Assert.Equal(round + 1, match.RoundNumber);
+            Assert.NotEqual(handIds, p2.Hand.Select(c => c.CardInstanceId).ToList());
         }
 
         [Fact]

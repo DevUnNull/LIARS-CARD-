@@ -23,6 +23,7 @@ namespace LiarsCard.Network
         public string playerId;
         public bool isAlive;
         public int remainingCardCount;
+        public int shotCount;   // phát bắn kế tiếp X/6
     }
 
     [Serializable]
@@ -104,6 +105,7 @@ namespace LiarsCard.Network
         public string nextPhase;
         public string winnerPlayerId;
         public int stateVersion;
+        public int shotNumber;   // phát bắn X trên 6
     }
 
     [Serializable]

@@ -97,7 +97,8 @@ namespace Back_End.Services
             bool survived,
             bool eliminated,
             string nextPhase,
-            string? winnerPlayerId)
+            string? winnerPlayerId,
+            int shotNumber = 0)
         {
             var writer = new NetDataWriter();
             writer.Put((byte)12);
@@ -107,12 +108,69 @@ namespace Back_End.Services
             writer.Put(eliminated);
             writer.Put(nextPhase);
             writer.Put(winnerPlayerId ?? string.Empty);
+            writer.Put((byte)Math.Clamp(shotNumber, 0, 6)); // cuối gói: số phát X/6
 
             SendToMatchPlayers(match, writer);
 
             _logger?.LogInformation(
                 "BroadcastTriggerResult: victim={VictimId}, isHit={Hit}, survived={Survived}, nextPhase={Phase}, winner={Winner}",
                 penalizedPlayerId, isBulletHit, survived, nextPhase, winnerPlayerId);
+        }
+
+        /// <summary>
+        /// Chuyển tiếp tư thế khẩu súng đang được người bị phạt cầm tới những người chơi còn lại trong trận
+        /// (để mọi người thấy súng được nhấc lên, dí vào đầu và di chuyển theo người cầm).
+        /// Packet Type: 13
+        /// Format: byte(13), string holderPlayerId, byte stage, float pitch
+        /// stage: 1 = đang nhấc súng, 2 = đã lên đạn và dí vào đầu. pitch: độ cúi/ngửa của đầu người cầm (độ, dương = cúi).
+        /// </summary>
+        public void BroadcastGunPose(GameMatch match, string holderPlayerId, byte stage, float pitch)
+        {
+            var writer = new NetDataWriter();
+            writer.Put((byte)13);
+            writer.Put(holderPlayerId);
+            writer.Put(stage);
+            writer.Put(pitch);
+
+            foreach (var player in match.Players)
+            {
+                if (player.PlayerId == holderPlayerId)
+                    continue;
+
+                var peer = _playerConnectionService.GetConnection(player.PlayerId);
+                if (peer != null && peer.ConnectionState == ConnectionState.Connected)
+                {
+                    // Sequenced: tư thế gửi liên tục, gói cũ bị rớt cũng không sao
+                    peer.Send(writer, DeliveryMethod.Sequenced);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Chuyển tiếp hành động của bài trên tay (nhấc lên xem / hạ xuống / đánh bài) tới những người chơi còn lại.
+        /// Packet Type: 14
+        /// Format: byte(14), string playerId, byte action, byte count
+        /// action: 0 = hạ bài xuống, 1 = nhấc bài lên xem, 2 = đánh `count` lá vào chồng bài giữa bàn.
+        /// </summary>
+        public void BroadcastHandAction(GameMatch match, string playerId, byte action, byte count)
+        {
+            var writer = new NetDataWriter();
+            writer.Put((byte)14);
+            writer.Put(playerId);
+            writer.Put(action);
+            writer.Put(count);
+
+            foreach (var player in match.Players)
+            {
+                if (player.PlayerId == playerId)
+                    continue;
+
+                var peer = _playerConnectionService.GetConnection(player.PlayerId);
+                if (peer != null && peer.ConnectionState == ConnectionState.Connected)
+                {
+                    peer.Send(writer, DeliveryMethod.ReliableOrdered);
+                }
+            }
         }
 
         private void SendToMatchPlayers(GameMatch match, NetDataWriter writer)

@@ -18,6 +18,12 @@ namespace Back_End.Infrastructure.MatchState
             return null;
         }
 
+        public GameMatch? FindActiveMatchByPlayer(string playerId)
+        {
+            return _matches.Values.FirstOrDefault(m =>
+                m.Phase != RoundPhase.MatchEnded && m.Players.Any(p => p.PlayerId == playerId));
+        }
+
         public void SaveMatch(GameMatch match)
         {
             match.UpdatedAt = DateTime.UtcNow;

@@ -10,7 +10,32 @@ public class ChairItem : Item
     [SerializeField] private int sitIndex;
     [SerializeField] private int tableID;
 
+    // Mặt ghế cao 0.45 trong model gốc (chưa nhân scale của prefab)
+    private const float ModelSeatHeight = 0.45f;
+    [SerializeField] private float eyeAboveSeat = 0.95f;
+
+    public int SitIndex => sitIndex;
+    public int TableId => tableID;
+
     private bool isRequesting;
+
+    // Đặt người chơi lên ghế: mắt cao hơn mặt ghế để nhìn qua mặt bàn thấy mặt người đối diện, rồi quay về tâm bàn.
+    private void SeatPlayer(PlayerController player)
+    {
+        var controller = player.GetComponent<CharacterController>();
+        var look = player.firstPersonLook;
+
+        controller.enabled = false;
+
+        float seatTopY = transform.position.y + ModelSeatHeight * transform.lossyScale.y;
+        player.transform.position = new Vector3(transform.position.x, player.transform.position.y, transform.position.z);
+        player.transform.position += Vector3.up * (seatTopY + eyeAboveSeat - look.playerCamera.transform.position.y);
+
+        controller.enabled = true;
+        player.firstPersonMovement.enabled = false;
+
+        look.FocusOnTable(LiarsCard.Cards3D.TableCenterPile3D.GetTableTopCenter());
+    }
 
     public override void OnInteract()
     {
@@ -68,16 +93,7 @@ public class ChairItem : Item
 
                 Debug.Log($"Table : {tableID}, Chair : {sitIndex}.");
 
-                var player = PlayerController.Instance;
-                var controller = player.GetComponent<CharacterController>();
-
-                controller.enabled = false;
-
-                player.transform.position = transform.position + Vector3.up * 1.5f;
-
-                controller.enabled = true;
-
-                player.firstPersonMovement.enabled = false;
+                SeatPlayer(PlayerController.Instance);
 
                 if (TableSessionManager.Instance != null)
                 {

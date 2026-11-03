@@ -8,6 +8,8 @@ namespace Back_End.DTOs
         public bool IsAlive { get; set; }
         public int RemainingCardCount { get; set; }
         public bool IsConnected { get; set; }
+        /// <summary>Phát bắn kế tiếp của súng người này (1..6), hiển thị X/6 trên đầu.</summary>
+        public int ShotCount { get; set; } = 1;
     }
 
     public class PublicLastPlayDto

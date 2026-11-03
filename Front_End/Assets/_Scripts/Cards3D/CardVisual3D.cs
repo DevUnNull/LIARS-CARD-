@@ -104,18 +104,20 @@ namespace LiarsCard.Cards3D
         /// <summary>
         /// Animates the card flying along a parabolic arc toward the table center pile.
         /// </summary>
-        public void AnimateFlyToWorld(Vector3 targetWorldPos, Quaternion targetWorldRot, float duration, Action onArrival)
+        public void AnimateFlyToWorld(Vector3 targetWorldPos, Quaternion targetWorldRot, float duration, Action onArrival, float endScale = 1f)
         {
-            StartCoroutine(FlyRoutine(targetWorldPos, targetWorldRot, duration, onArrival));
+            StartCoroutine(FlyRoutine(targetWorldPos, targetWorldRot, duration, onArrival, endScale));
         }
 
-        private IEnumerator FlyRoutine(Vector3 targetWorldPos, Quaternion targetWorldRot, float duration, Action onArrival)
+        private IEnumerator FlyRoutine(Vector3 targetWorldPos, Quaternion targetWorldRot, float duration, Action onArrival, float endScale)
         {
             isFlying = true;
             transform.SetParent(null, true); // Detach from hand anchor
 
             Vector3 startPos = transform.position;
             Quaternion startRot = transform.rotation;
+            Vector3 startScale = transform.localScale;
+            Vector3 targetScale = startScale * endScale;
 
             float elapsed = 0f;
             while (elapsed < duration)
@@ -133,12 +135,14 @@ namespace LiarsCard.Cards3D
 
                 transform.position = currentPos;
                 transform.rotation = Quaternion.Slerp(startRot, targetWorldRot, easeT);
+                transform.localScale = Vector3.Lerp(startScale, targetScale, easeT);
 
                 yield return null;
             }
 
             transform.position = targetWorldPos;
             transform.rotation = targetWorldRot;
+            transform.localScale = targetScale;
             isFlying = false;
 
             onArrival?.Invoke();

@@ -1,4 +1,6 @@
-﻿using LiteNetLib;
+﻿using Back_End.Infrastructure.MatchState;
+using Back_End.Models;
+using LiteNetLib;
 using LiteNetLib.Utils;
 
 namespace Back_End.Services
@@ -13,13 +15,17 @@ namespace Back_End.Services
         private ILogger<LobbyNetworkService> logger;
         private ConnectionTicketService ticketService;
         private PlayerPositionService playerPositionService;
+        private IMatchStore matchStore;
+        private GameBroadcastService gameBroadcastService;
 
-        public LobbyNetworkService(PlayerConnectionService playerConnections, ILogger<LobbyNetworkService> logger, ConnectionTicketService ticketService, PlayerPositionService playerPositionService)
+        public LobbyNetworkService(PlayerConnectionService playerConnections, ILogger<LobbyNetworkService> logger, ConnectionTicketService ticketService, PlayerPositionService playerPositionService, IMatchStore matchStore, GameBroadcastService gameBroadcastService)
         {
             playerConnectionService = playerConnections;
             this.logger = logger;
             this.ticketService = ticketService;
             this.playerPositionService = playerPositionService;
+            this.matchStore = matchStore;
+            this.gameBroadcastService = gameBroadcastService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -142,12 +148,24 @@ namespace Back_End.Services
                         return;
                     }
 
-                    if (reader.AvailableBytes != 17)
+                    if (reader.AvailableBytes < 1)
                         return;
 
                     byte packetType = reader.GetByte();
 
-                    if (packetType != 1)
+                    if (packetType == 4)
+                    {
+                        HandleGunPose(playerId, reader);
+                        return;
+                    }
+
+                    if (packetType == 5)
+                    {
+                        HandleHandAction(playerId, reader);
+                        return;
+                    }
+
+                    if (packetType != 1 || reader.AvailableBytes != 16)
                         return;
 
                     float x = reader.GetFloat();
@@ -199,6 +217,59 @@ namespace Back_End.Services
                 playerPositionService.Clear();
                 logger.LogInformation("LiteNetLib stopped");
             }
+        }
+
+        /// <summary>
+        /// Client -> Server, Packet Type 4: byte stage, float pitch.
+        /// Chỉ chấp nhận từ đúng người đang bị phạt trong lúc chờ bóp cò; hợp lệ thì chuyển tiếp (packet 13) cho cả bàn.
+        /// </summary>
+        private void HandleGunPose(string playerId, NetPacketReader reader)
+        {
+            if (reader.AvailableBytes != 5)
+                return;
+
+            byte stage = reader.GetByte();
+            float pitch = reader.GetFloat();
+
+            if (stage < 1 || stage > 2 || !float.IsFinite(pitch))
+                return;
+
+            var match = matchStore.FindActiveMatchByPlayer(playerId);
+
+            if (match == null ||
+                match.Phase != RoundPhase.PenaltyResolution ||
+                match.PenaltyResolved ||
+                match.PenalizedPlayerId != playerId)
+            {
+                return;
+            }
+
+            gameBroadcastService.BroadcastGunPose(match, playerId, stage, Math.Clamp(pitch, -90f, 90f));
+        }
+
+        /// <summary>
+        /// Client -> Server, Packet Type 5: byte action, byte count (0 = hạ bài, 1 = nhấc bài xem, 2 = đánh bài).
+        /// Chỉ là hiệu ứng hiển thị: chỉ chuyển tiếp (packet 14) khi người gửi đang trong trận chưa kết thúc;
+        /// đánh bài (2) phải là 1..3 lá.
+        /// </summary>
+        private void HandleHandAction(string playerId, NetPacketReader reader)
+        {
+            if (reader.AvailableBytes != 2)
+                return;
+
+            byte action = reader.GetByte();
+            byte count = reader.GetByte();
+
+            if (action > 2 || (action == 2 && (count < 1 || count > 3)))
+                return;
+
+            var match = matchStore.FindActiveMatchByPlayer(playerId);
+
+            // Không kiểm tra lượt: client gửi sau khi REST đánh bài thành công nên lượt có thể đã chuyển
+            if (match == null)
+                return;
+
+            gameBroadcastService.BroadcastHandAction(match, playerId, action, action == 2 ? count : (byte)0);
         }
 
         private void BroadcastPlayerPosition(string playerId, float x, float y, float z, float rotationY)
