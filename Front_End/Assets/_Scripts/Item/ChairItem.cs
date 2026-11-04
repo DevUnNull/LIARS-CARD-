@@ -9,6 +9,10 @@ public class ChairItem : Item
 {
     [SerializeField] private int sitIndex;
     [SerializeField] private int tableID;
+    [Tooltip("Mô hình bàn (mặt bàn) của khu bàn này. Để trống thì dùng object tên \"Table\".")]
+    [SerializeField] private Transform tableModel;
+    [Tooltip("Điểm súng nằm chờ trên bàn này.")]
+    [SerializeField] private Transform gunSpot;
 
     // Mặt ghế cao 0.45 trong model gốc (chưa nhân scale của prefab)
     private const float ModelSeatHeight = 0.45f;
@@ -34,7 +38,14 @@ public class ChairItem : Item
         controller.enabled = true;
         player.firstPersonMovement.enabled = false;
 
+        if (tableModel != null) LiarsCard.Cards3D.TableCenterPile3D.ActiveTable = tableModel;
         look.FocusOnTable(LiarsCard.Cards3D.TableCenterPile3D.GetTableTopCenter());
+
+        // Bộ bài và súng chuyển sang bàn vừa ngồi
+        if (LiarsCard.Cards3D.TableDeck3D.Instance != null) LiarsCard.Cards3D.TableDeck3D.Instance.BuildDeckOnTable();
+        if (LiarsCard.Cards3D.TableCenterPile3D.Instance != null) LiarsCard.Cards3D.TableCenterPile3D.Instance.AlignWithTable();
+        if (gunSpot != null && LiarsCard.Cards3D.RevolverGun.Instance != null)
+            LiarsCard.Cards3D.RevolverGun.Instance.SetRestPose(gunSpot.position, gunSpot.rotation);
     }
 
     public override void OnInteract()

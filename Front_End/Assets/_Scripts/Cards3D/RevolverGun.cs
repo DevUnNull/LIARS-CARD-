@@ -136,6 +136,14 @@ namespace LiarsCard.Cards3D
         }
 
         /// <summary>Bắt đầu/kết thúc trận: đặt súng về lại bàn ngay lập tức.</summary>
+        /// <summary>Đổi chỗ súng nằm chờ (khi người chơi ngồi vào bàn khác trong quán).</summary>
+        public void SetRestPose(Vector3 pos, Quaternion rot)
+        {
+            restPos = pos;
+            restRot = rot;
+            if (Stage == GunStage.OnTable) transform.SetPositionAndRotation(pos, rot);
+        }
+
         public void ResetToTable()
         {
             StopAllCoroutines();

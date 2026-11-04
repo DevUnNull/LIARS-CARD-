@@ -31,7 +31,8 @@ namespace LiarsCard.Cards3D
 
         private void Start()
         {
-            BuildDeckOnTable();
+            // Quán nhiều bàn: bộ bài chỉ dựng khi người chơi đã ngồi vào một bàn (ChairItem gọi lại BuildDeckOnTable)
+            if (TableCenterPile3D.HasTable) BuildDeckOnTable();
         }
 
         public void BuildDeckOnTable()

@@ -30,9 +30,14 @@ namespace LiarsCard.Cards3D
         }
 
         /// <summary>Tâm mặt bàn trong world space. Dùng chung cho chồng bài, bộ bài và animation chia bài.</summary>
+        /// <summary>Bàn đang ngồi (quán nhiều bàn). Null thì dùng object tên "Table" như scene cũ.</summary>
+        public static Transform ActiveTable { get; set; }
+
+        public static bool HasTable => ActiveTable != null || GameObject.Find("Table") != null;
+
         public static Vector3 GetTableTopCenter()
         {
-            var t = GameObject.Find("Table");
+            var t = ActiveTable != null ? ActiveTable.gameObject : GameObject.Find("Table");
             if (t == null) return new Vector3(-1.75f, 1.5f, -5f); // fallback: vị trí bàn mặc định
 
             // Mặt bàn = đỉnh collider (đúng cho cube lẫn model bàn); không có collider thì dùng công thức cube cũ.
