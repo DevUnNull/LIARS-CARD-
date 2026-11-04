@@ -101,6 +101,7 @@ namespace Back_End.Services
                 match.RoundTransitionHandled = false;
                 match.CurrentPenaltyEventId = null;
                 match.PenaltyAckedPlayers.Clear();
+                match.TrustedPlayers.Clear();
                 match.StateVersion++;
 
                 // Broadcast âm thanh Tố ("To") đồng bộ qua mạng tại vị trí người tố

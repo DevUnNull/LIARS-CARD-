@@ -33,9 +33,12 @@ namespace Back_End.Services
         {
             match.PenalizedPlayerId = null;
             match.LastPlay = null;
+            match.TrustedPlayers.Clear();
 
+            // Có người đã đánh hết bài (và đã an toàn) -> vòng kết thúc, chia lại bài cho mọi người còn sống. Súng giữ nguyên.
+            bool someoneOutOfCards = match.AlivePlayers.Any(p => p.RemainingCardCount == 0);
             var next = _turnStateMachine.GetNextTurnPlayer(match, shooterPlayerId);
-            if (next == null)
+            if (next == null || someoneOutOfCards)
             {
                 StartRound(match);
                 return;
@@ -103,6 +106,7 @@ namespace Back_End.Services
 
             // Reset round data
             match.LastPlay = null;
+            match.TrustedPlayers.Clear();
             match.RoundNumber++;
             match.PenalizedPlayerId = null;
 

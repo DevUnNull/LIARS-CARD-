@@ -124,9 +124,10 @@ namespace LiarsCard.Network
             }
         }
 
-        public IEnumerator Challenge(string matchId, string token, ChallengeRequest request, Action<ChallengeResponse> onSuccess, Action<string> onError)
+        // action: "challenge" (tố) hoặc "trust" (tin lượt đánh cuối của người vừa hết bài)
+        public IEnumerator Challenge(string matchId, string token, ChallengeRequest request, Action<ChallengeResponse> onSuccess, Action<string> onError, string action = "challenge")
         {
-            string url = $"{baseUrl}/api/matches/{matchId}/deck/challenge";
+            string url = $"{baseUrl}/api/matches/{matchId}/deck/{action}";
             string json = JsonUtility.ToJson(request);
 
             using (UnityWebRequest req = new UnityWebRequest(url, "POST"))

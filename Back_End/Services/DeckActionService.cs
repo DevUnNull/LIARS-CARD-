@@ -14,13 +14,16 @@ namespace Back_End.Services
         private readonly DeckRuleEngine _ruleEngine;
         private readonly TurnStateMachine _turnStateMachine;
         private readonly GameBroadcastService? _gameBroadcastService;
+        private readonly DeckRoundService? _deckRoundService;
 
         public DeckActionService(
             IMatchStore matchStore,
             DeckRuleEngine ruleEngine,
             TurnStateMachine turnStateMachine,
-            GameBroadcastService? gameBroadcastService = null)
+            GameBroadcastService? gameBroadcastService = null,
+            DeckRoundService? deckRoundService = null)
         {
+            _deckRoundService = deckRoundService;
             _matchStore = matchStore;
             _ruleEngine = ruleEngine;
             _turnStateMachine = turnStateMachine;
@@ -117,6 +120,78 @@ namespace Back_End.Services
                 _matchStore.SaveMatch(match);
                 _matchStore.SaveActionResult(matchId, request.ActionId, payloadHash, response, match.StateVersion);
 
+                return response;
+            }
+        }
+
+        /// <summary>
+        /// "Tin": người đánh trước đã hết bài và người đến lượt không tố. Khi tất cả người còn bài đều Tin,
+        /// người hết bài an toàn -> vòng kết thúc, chia lại bài mới (súng giữ nguyên). Chưa đủ thì chuyển hỏi người kế.
+        /// </summary>
+        public async Task<ChallengeResponse> TrustAsync(string matchId, string playerId, ChallengeRequest request)
+        {
+            using (await _matchStore.LockMatchAsync(matchId))
+            {
+                var match = _matchStore.GetMatch(matchId) ?? throw GameRuleException.MatchNotFound();
+                if (match.FindPlayer(playerId) == null) throw GameRuleException.NotMatchMember();
+
+                string payloadHash = Convert.ToHexString(SHA256.HashData(
+                    Encoding.UTF8.GetBytes($"trust_{request.ActionId}_{request.ExpectedVersion}_{request.TargetPlayId}")));
+                var existing = _matchStore.GetActionResult(matchId, request.ActionId);
+                if (existing != null)
+                {
+                    if (existing.PayloadHash == payloadHash && existing.Result is ChallengeResponse cached) return cached;
+                    throw GameRuleException.DuplicateAction(match.StateVersion);
+                }
+
+                if (match.StateVersion != request.ExpectedVersion) throw GameRuleException.StaleVersion(match.StateVersion);
+
+                _ruleEngine.ValidateChallenge(match, playerId, request.TargetPlayId);
+                if (!_ruleEngine.IsLastPlayOutOfCards(match))
+                {
+                    throw GameRuleException.CannotChallenge("Chỉ được Tin khi đối thủ đã đánh hết bài.", match.StateVersion);
+                }
+
+                match.TrustedPlayers.Add(playerId);
+                var ownerId = match.LastPlay!.PlayerId;
+
+                // Người còn phải quyết định: còn sống, còn bài, chưa Tin
+                var pending = match.Players
+                    .Where(p => p.IsAlive && p.RemainingCardCount > 0 && p.PlayerId != ownerId && !match.TrustedPlayers.Contains(p.PlayerId))
+                    .ToList();
+
+                string nextPhase;
+                if (pending.Count == 0)
+                {
+                    // Không ai tố: người hết bài an toàn -> chia lại bài cho cả bàn
+                    match.LastPlay!.Resolved = true;
+                    if (_deckRoundService == null) throw new InvalidOperationException("DeckRoundService is not configured.");
+                    _deckRoundService.StartRound(match);
+                    nextPhase = match.Phase == RoundPhase.MatchEnded ? "MatchEnded" : "RoundStart";
+                }
+                else
+                {
+                    // Chuyển cho người kế tiếp theo chiều ghế trong số người chưa quyết định
+                    int cur = match.Players.FindIndex(p => p.PlayerId == playerId);
+                    var next = Enumerable.Range(1, match.Players.Count)
+                        .Select(s => match.Players[(cur + s) % match.Players.Count])
+                        .First(p => pending.Contains(p));
+                    match.CurrentTurnPlayerId = next.PlayerId;
+                    match.StateVersion++;
+                    nextPhase = "AwaitPlayOrChallenge";
+                }
+
+                var response = new ChallengeResponse
+                {
+                    ChallengeSucceeded = false,
+                    PenalizedPlayerId = string.Empty,
+                    NextPhase = nextPhase,
+                    AwaitingTriggerPull = false,
+                    StateVersion = match.StateVersion
+                };
+
+                _matchStore.SaveMatch(match);
+                _matchStore.SaveActionResult(matchId, request.ActionId, payloadHash, response, match.StateVersion);
                 return response;
             }
         }

@@ -355,16 +355,20 @@ public class LoginRoomController : MonoBehaviour
         cameraTransform.position = overviewAnchor.position + offset;
     }
 
+    // Phím bấm dạng "keycap": nền tối, chữ vàng, theo sau là mô tả
+    private static string Key(string k) =>
+        $"<mark=#1a120ccc padding=\"22,22,8,8\"><b><color=#E8C766>{k}</color></b></mark>   <color=#F5E8CC>";
+
     private void ApplyHint()
     {
         if (hintText == null) return;
         switch (State)
         {
             case LoginViewState.RoomOverview:
-                hintText.text = hovering ? "Nhấp để nói chuyện với bartender" : "Nhấp vào bartender để bắt chuyện";
+                hintText.text = hovering ? Key("Click") + "Nói chuyện với bartender" : "Nhấp vào bartender để bắt chuyện";
                 break;
             case LoginViewState.LoginActive:
-                hintText.text = "[Esc] Quay lại";
+                hintText.text = ""; // gợi ý [Esc] Quay lại đã nằm trong khung hội thoại
                 break;
             default:
                 hintText.text = "";

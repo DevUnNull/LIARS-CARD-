@@ -87,6 +87,23 @@ namespace Back_End.Controllers
         }
 
         /// <summary>
+        /// Tin lượt đánh cuối của người vừa hết bài (không tố).
+        /// </summary>
+        [HttpPost("trust")]
+        public async Task<ActionResult<ChallengeResponse>> Trust(
+            [FromRoute] string matchId,
+            [FromBody] ChallengeRequest request)
+        {
+            string? playerId = GetCurrentPlayerId();
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return Unauthorized(new GameErrorResponse { Code = "UNAUTHORIZED", Message = "Không xác định được danh tính người chơi." });
+            }
+
+            return Ok(await _deckActionService.TrustAsync(matchId, playerId, request));
+        }
+
+        /// <summary>
         /// Người chơi bị phạt chủ động bóp cò súng Nga (Russian Roulette).
         /// </summary>
         [HttpPost("pull-trigger")]

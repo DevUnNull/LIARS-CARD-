@@ -23,6 +23,12 @@ namespace Back_End.Rules
                 throw GameRuleException.NotYourTurn(match.StateVersion);
             }
 
+            // Người đánh trước đã hết bài: lượt này chỉ được Tố hoặc Tin, không được đánh tiếp
+            if (IsLastPlayOutOfCards(match))
+            {
+                throw GameRuleException.InvalidPhase("Đối thủ vừa đánh hết bài: bạn phải Tố (X) hoặc Tin (C).", match.StateVersion);
+            }
+
             if (cardInstanceIds == null || cardInstanceIds.Count < 1 || cardInstanceIds.Count > 3)
             {
                 throw GameRuleException.InvalidCardCount(match.StateVersion);
@@ -45,6 +51,15 @@ namespace Back_End.Rules
             }
 
             // Note: Bluff is completely valid here, do NOT check card ranks against TableRank!
+        }
+
+        /// <summary>Lượt đánh chưa giải quyết và người đánh nó đã hết sạch bài.</summary>
+        public bool IsLastPlayOutOfCards(GameMatch match)
+        {
+            var lp = match.LastPlay;
+            if (lp == null || lp.Resolved) return false;
+            var owner = match.FindPlayer(lp.PlayerId);
+            return owner != null && owner.IsAlive && owner.RemainingCardCount == 0;
         }
 
         public void ValidateChallenge(GameMatch match, string playerId, string targetPlayId)
