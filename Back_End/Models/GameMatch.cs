@@ -17,6 +17,8 @@ namespace Back_End.Models
         public DateTime? PenaltyResolvedAt { get; set; }
         public bool RoundTransitionHandled { get; set; } = false;
         public HashSet<string> PenaltyAckedPlayers { get; set; } = new();
+        /// <summary>Những người đã chọn "Tin" lượt đánh cuối (khi người đánh đã hết bài). Reset mỗi vòng / khi có tố.</summary>
+        public HashSet<string> TrustedPlayers { get; set; } = new();
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? StartedAt { get; set; } = DateTime.UtcNow;

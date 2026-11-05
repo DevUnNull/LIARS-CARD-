@@ -5,6 +5,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 
+[DefaultExecutionOrder(-200)] // Awake trước MatchApiClient để MatchApiClient lấy đúng baseUrl
 public class AuthApiClient : Singleton<AuthApiClient>
 {
     protected override void Awake()

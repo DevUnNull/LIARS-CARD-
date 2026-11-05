@@ -130,6 +130,12 @@ namespace LiarsCard.Cards3D
                 }
             }
 
+            // 4a. Tin: Nhấn phím C khi đối thủ vừa đánh hết bài
+            if (hand.IsCPressed() && CardBattleUI.Instance != null)
+            {
+                CardBattleUI.Instance.ActionTrust();
+            }
+
             // 4. Bắt láo: Nhấn phím X
             if (hand.IsXPressed())
             {
@@ -447,6 +453,10 @@ namespace LiarsCard.Cards3D
             }
             cardsInHand.Clear();
             focusedIndex = 0;
+
+            // Đang ném mà bài bị xoá (đồng bộ lại tay bài): coroutine ném sẽ không bao giờ xong -> dừng và mở khoá input
+            if (throwCoroutine != null) { StopCoroutine(throwCoroutine); throwCoroutine = null; }
+            if (currentState == throwingState) TransitionToState(idleState);
         }
 
         public void AnimateThrowSelectedCards(Action onComplete)
@@ -489,10 +499,12 @@ namespace LiarsCard.Cards3D
                 }));
             }
 
-            yield return new WaitUntil(() => completedCount >= thrownCards.Count);
+            // Timeout 3s: nếu 1 lá bị huỷ giữa chừng thì không bị kẹt ở ThrowingHandState
+            float waited = 0f;
+            while (completedCount < thrownCards.Count && waited < 3f) { waited += Time.deltaTime; yield return null; }
 
             // Dọn các lá đã đánh khỏi hand
-            cardsInHand.RemoveAll(c => thrownCards.Contains(c));
+            cardsInHand.RemoveAll(c => c == null || thrownCards.Contains(c));
             focusedIndex = Mathf.Clamp(focusedIndex, 0, Mathf.Max(0, cardsInHand.Count - 1));
 
             // Quay về IdleHandState sau khi đánh xong
@@ -544,6 +556,13 @@ namespace LiarsCard.Cards3D
             var kb = Keyboard.current;
             if (kb != null) return kb.eKey.wasPressedThisFrame;
             try { return Input.GetKeyDown(KeyCode.E); } catch { return false; }
+        }
+
+        public bool IsCPressed()
+        {
+            var kb = Keyboard.current;
+            if (kb != null) return kb.cKey.wasPressedThisFrame;
+            try { return Input.GetKeyDown(KeyCode.C); } catch { return false; }
         }
 
         public bool IsXPressed()

@@ -51,6 +51,9 @@ public class CardBattleUI : MonoBehaviour
 
     [Header("uGUI Battle Hierarchy References")]
     public GameObject battleHUD;
+    [Tooltip("Object BattleHUD/Tutorial/Truth: chỉ hiện khi đến lượt mình và đối thủ vừa đánh hết bài (được Tố hoặc Tin). Để trống thì tự tìm theo đường dẫn.")]
+    public GameObject truthObject;
+    private bool lastPlayOwnerOutOfCards;
     public TMP_Text roundText;
     public TMP_Text tableRankText;
     public Image imageCurrentCart;
@@ -342,7 +345,7 @@ public class CardBattleUI : MonoBehaviour
         pendingWinnerId = null;
 
         // Người bị phạt nhấc súng trên bàn lên, lên đạn và dí vào đầu (mọi người đều thấy)
-        if (RevolverGun.Instance != null) RevolverGun.Instance.BeginPenalty(penalizedId);
+        if (RevolverGun.Instance != null) RevolverGun.Instance.BeginPenalty(penalizedId, !string.IsNullOrEmpty(challengerId));
 
         if (challengeSucceeded)
         {
@@ -597,6 +600,8 @@ public class CardBattleUI : MonoBehaviour
         string myId = TableSessionManager.Instance != null ? TableSessionManager.Instance.MyPlayerId : "";
         var myPublicState = res.players?.Find(p => string.Equals(p.playerId, myId, System.StringComparison.OrdinalIgnoreCase));
         bool isMeDead = myPublicState != null && !myPublicState.isAlive;
+        var lastOwner = hasLastPlay ? res.players?.Find(p => string.Equals(p.playerId, lastPlay.playerId, System.StringComparison.OrdinalIgnoreCase)) : null;
+        lastPlayOwnerOutOfCards = lastOwner != null && lastOwner.isAlive && lastOwner.remainingCardCount == 0;
         RemoteHands.Instance.SyncCounts(res.players, myId);
         RemoteHands.Instance.SyncShots(res.players, myId);   // bài trên tay người khác (hiển thị 3D)
         bool hasMatchEnded = !string.IsNullOrEmpty(res.winnerPlayerId) || res.phase == "MatchEnded" || !string.IsNullOrEmpty(winnerPlayerId);
@@ -739,6 +744,28 @@ public class CardBattleUI : MonoBehaviour
         ));
     }
 
+    /// <summary>"Tin": không tố lượt đánh cuối của người vừa hết bài. Hết người nghi ngờ thì vòng kết thúc và chia bài lại.</summary>
+    public void ActionTrust()
+    {
+        if (!IsMyTurn || lastPlay == null || string.IsNullOrEmpty(lastPlay.playId)) return;
+
+        var auth = AuthApiClient.Instance;
+        if (auth == null || string.IsNullOrEmpty(auth.AccessToken)) return;
+
+        var req = new ChallengeRequest
+        {
+            actionId = Guid.NewGuid().ToString(),
+            expectedVersion = stateVersion,
+            targetPlayId = lastPlay.playId
+        };
+
+        statusMessage = "Bạn chọn TIN. Đang chờ...";
+        StartCoroutine(MatchApiClient.Instance.Challenge(matchId, auth.AccessToken, req,
+            onSuccess: res => { stateVersion = res.stateVersion; },
+            onError: err => statusMessage = $"Lỗi: {err}",
+            action: "trust"));
+    }
+
     public void ActionReturnToLobby()
     {
         winnerPlayerId = null;
@@ -853,6 +880,13 @@ public class CardBattleUI : MonoBehaviour
         {
             if (battleHUD.activeSelf != inBattle) battleHUD.SetActive(inBattle);
 
+            if (truthObject == null) { var t = battleHUD.transform.Find("Tutorial/Truth"); if (t != null) truthObject = t.gameObject; }
+            if (truthObject != null)
+            {
+                bool showTruth = inBattle && IsMyTurn && lastPlayOwnerOutOfCards && !awaitingTriggerPull && !showPenaltyModal && string.IsNullOrEmpty(winnerPlayerId);
+                if (truthObject.activeSelf != showTruth) truthObject.SetActive(showTruth);
+            }
+
             if (inBattle)
             {
                 if (roundText != null)
@@ -941,7 +975,7 @@ public class CardBattleUI : MonoBehaviour
                     }
                     else if (IsMyTurn)
                     {
-                        SetTxt(hudHintText, "<b>ĐẾN LƯỢT:</b> [A/D]: CHỌN LÁ | [SPACE]: CHỌN/BỎ LÁ (TỐI ĐA 3) | [E]: ĐÁNH BÀI | [X]: BẮT LÁO" + myShotInfo);
+                        SetTxt(hudHintText, "<b>ĐẾN LƯỢT:</b> [A/D]: CHỌN LÁ | [SPACE]: CHỌN/BỎ LÁ (TỐI ĐA 3) | [E]: ĐÁNH BÀI | [X]: BẮT LÁO | [C]: TIN (khi đối thủ hết bài)" + myShotInfo);
                     }
                     else
                     {

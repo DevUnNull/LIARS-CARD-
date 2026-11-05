@@ -3,6 +3,7 @@ using System.Collections;
 using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 
@@ -26,17 +27,65 @@ public class AuthFormController : MonoBehaviour
 
     private bool isBusy;
 
-    // Enter ở ô mật khẩu = gửi đi
+    private const string DefaultDomain = "@gmail.com";
+    private TMP_InputField[] loginOrder, registerOrder;
+
     private void Start()
     {
+        loginOrder = new[] { loginEmail, loginPassword };
+        registerOrder = new[] { registerEmail, displayName, registerPassword };
+
+        // Enter ở ô mật khẩu = gửi đi; Enter ở ô khác = nhảy sang ô kế tiếp
         if (loginPassword != null) loginPassword.onSubmit.AddListener(_ => OnLoginClicked());
         if (registerPassword != null) registerPassword.onSubmit.AddListener(_ => OnRegisterClicked());
+        if (loginEmail != null) loginEmail.onSubmit.AddListener(_ => FocusNext(loginOrder, loginEmail, 1));
+        if (registerEmail != null) registerEmail.onSubmit.AddListener(_ => FocusNext(registerOrder, registerEmail, 1));
+        if (displayName != null) displayName.onSubmit.AddListener(_ => FocusNext(registerOrder, displayName, 1));
+
+        // Rời ô email mà chưa có @ thì tự thêm @gmail.com
+        if (loginEmail != null) loginEmail.onEndEdit.AddListener(_ => loginEmail.text = WithDomain(loginEmail.text));
+        if (registerEmail != null) registerEmail.onEndEdit.AddListener(_ => registerEmail.text = WithDomain(registerEmail.text));
+    }
+
+    // Tab / Shift+Tab chuyển ô trong form đang gõ
+    private void Update()
+    {
+        var kb = Keyboard.current;
+        if (kb == null || !kb.tabKey.wasPressedThisFrame) return;
+
+        int dir = kb.shiftKey.isPressed ? -1 : 1;
+        foreach (var order in new[] { loginOrder, registerOrder })
+        {
+            if (order == null) continue;
+            foreach (var f in order)
+            {
+                if (f != null && f.isFocused) { FocusNext(order, f, dir); return; }
+            }
+        }
+    }
+
+    private static void FocusNext(TMP_InputField[] order, TMP_InputField current, int dir)
+    {
+        int i = System.Array.IndexOf(order, current);
+        var next = order[(i + dir + order.Length) % order.Length];
+        if (next == null) return;
+        current.text = current.text.Replace("\t", ""); // TMP có thể đã chèn ký tự Tab
+        next.Select();
+        next.ActivateInputField();
+    }
+
+    // Chưa có @ thì thêm @gmail.com; đã có @ thì giữ nguyên
+    private static string WithDomain(string email)
+    {
+        email = email?.Trim() ?? "";
+        return email.Length == 0 || email.Contains("@") ? email : email + DefaultDomain;
     }
 
     public void OnLoginClicked()
     {
         if (isBusy) return;
 
+        loginEmail.text = WithDomain(loginEmail.text);
         if (string.IsNullOrWhiteSpace(loginEmail.text) ||
             string.IsNullOrEmpty(loginPassword.text))
         {
@@ -51,6 +100,7 @@ public class AuthFormController : MonoBehaviour
     {
         if (isBusy) return;
 
+        registerEmail.text = WithDomain(registerEmail.text);
         if (string.IsNullOrWhiteSpace(registerEmail.text) ||
             string.IsNullOrWhiteSpace(displayName.text) ||
             string.IsNullOrEmpty(registerPassword.text))

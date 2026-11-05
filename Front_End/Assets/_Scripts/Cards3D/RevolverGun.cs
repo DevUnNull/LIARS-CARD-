@@ -100,10 +100,11 @@ namespace LiarsCard.Cards3D
         #region Public API (gọi từ CardBattleUI / NetworkManager)
 
         /// <summary>Có người bị phạt: súng được người đó nhấc lên. An toàn khi gọi nhiều lần.</summary>
-        public void BeginPenalty(string holderPlayerId)
+        public void BeginPenalty(string holderPlayerId, bool force = false)
         {
-            // ignoreBeginUntil: polling có thể còn báo "đang chờ bóp cò" vài giây sau khi đã bắn; không nhấc súng lại
-            if (busy || Stage != GunStage.OnTable || Time.time < ignoreBeginUntil || string.IsNullOrEmpty(holderPlayerId)) return;
+            // ignoreBeginUntil: polling có thể còn báo "đang chờ bóp cò" vài giây sau khi đã bắn; không nhấc súng lại.
+            // force = true khi đây là lần tố cáo mới (server/người tố báo trực tiếp), không phải polling cũ.
+            if (busy || Stage != GunStage.OnTable || (!force && Time.time < ignoreBeginUntil) || string.IsNullOrEmpty(holderPlayerId)) return;
 
             holderId = holderPlayerId;
             holderIsMe = IsMe(holderPlayerId);
