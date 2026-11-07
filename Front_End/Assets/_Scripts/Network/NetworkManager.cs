@@ -9,8 +9,8 @@ using LiarsCard.Cards3D;
 
 public class NetworkManager : Singleton<NetworkManager>
 {
-    [SerializeField]
-    private string apiBaseUrl = "http://localhost:5280";
+    private string ApiBaseUrl =>
+    AuthApiClient.Instance.baseUrl;
 
     [Header("LiteNetLib")]
     [SerializeField] private string serverAddress = "127.0.0.1";
@@ -204,7 +204,7 @@ public class NetworkManager : Singleton<NetworkManager>
     private async Task<string> RequestTicketAsync(string accessToken, CancellationToken token)
     {
         string url =
-            $"{apiBaseUrl.TrimEnd('/')}/api/connection/ticket";
+            $"{ApiBaseUrl.TrimEnd('/')}/api/connection/ticket";
 
         using (var request = new UnityWebRequest(url, "POST"))
         {

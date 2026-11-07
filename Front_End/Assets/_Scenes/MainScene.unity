@@ -364,7 +364,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8b7b94a2b90029d4ea12cce7bde36c42, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkManager
-  apiBaseUrl: http://localhost:5280
   serverAddress: 127.0.0.1
   serverPort: 9050
   httpTimeoutSeconds: 15
@@ -16221,7 +16220,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0cf1d6f92d9d7348a13b2823c05b0be, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AuthApiClient
-  baseUrl: http://localhost:5280
+  baseUrl: http://localhost:5000
 --- !u!4 &1830674068
 Transform:
   m_ObjectHideFlags: 0
