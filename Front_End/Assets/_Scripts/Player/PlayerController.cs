@@ -34,6 +34,8 @@ public class PlayerController : Singleton<PlayerController>
 
         network.SendPlayerTransform(
             transform.position,
-            transform.eulerAngles.y);
+            transform.eulerAngles.y,
+            firstPersonLook.HeadYaw,
+            firstPersonLook.HeadPitch);
     }
 }

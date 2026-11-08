@@ -60,7 +60,10 @@ builder.Services.AddSingleton<IMongoClient>(sp =>
 {
     var settings = sp.GetRequiredService<IOptions<MongoDbContext>>().Value;
 
-    return new MongoClient(settings.ConnectionString);
+    var mongoSettings = MongoClientSettings.FromConnectionString(settings.ConnectionString);
+    // Schannel trên Windows hay lỗi "Local Security Authority cannot be contacted" khi bắt tay TLS 1.3 với Atlas
+    mongoSettings.SslSettings = new SslSettings { EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12 };
+    return new MongoClient(mongoSettings);
 });
 
 builder.Services.AddSingleton<IMongoDatabase>(sp =>
@@ -165,6 +168,7 @@ builder.Services.AddHostedService<LobbyNetworkService>();
 builder.Services.AddSingleton<ConnectionTicketService>();
 builder.Services.AddSingleton<PlayerPositionService>();
 builder.Services.AddSingleton<GameBroadcastService>();
+builder.Services.AddSingleton<JukeboxService>(sp => new JukeboxService(sp.GetRequiredService<PlayerConnectionService>()));
 
 var app = builder.Build();
 

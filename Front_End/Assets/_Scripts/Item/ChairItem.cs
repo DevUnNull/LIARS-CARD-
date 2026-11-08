@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Text;
 using UnityEngine;
@@ -19,6 +19,7 @@ public class ChairItem : Item
     [SerializeField] private float eyeAboveSeat = 0.95f;
 
     public int SitIndex => sitIndex;
+    public float SeatTopY => transform.position.y + ModelSeatHeight * transform.lossyScale.y;
     public int TableId => tableID;
 
     private bool isRequesting;
@@ -31,7 +32,7 @@ public class ChairItem : Item
 
         controller.enabled = false;
 
-        float seatTopY = transform.position.y + ModelSeatHeight * transform.lossyScale.y;
+        float seatTopY = SeatTopY;
         player.transform.position = new Vector3(transform.position.x, player.transform.position.y, transform.position.z);
         player.transform.position += Vector3.up * (seatTopY + eyeAboveSeat - look.playerCamera.transform.position.y);
 
@@ -40,6 +41,7 @@ public class ChairItem : Item
 
         if (tableModel != null) LiarsCard.Cards3D.TableCenterPile3D.ActiveTable = tableModel;
         look.FocusOnTable(LiarsCard.Cards3D.TableCenterPile3D.GetTableTopCenter());
+        look.LockBody(true);   // thân hướng vào bàn, chuột chỉ xoay đầu
 
         // Bộ bài và súng chuyển sang bàn vừa ngồi
         if (LiarsCard.Cards3D.TableDeck3D.Instance != null) LiarsCard.Cards3D.TableDeck3D.Instance.BuildDeckOnTable();

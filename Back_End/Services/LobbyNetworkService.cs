@@ -1,4 +1,4 @@
-﻿using Back_End.Infrastructure.MatchState;
+using Back_End.Infrastructure.MatchState;
 using Back_End.Models;
 using LiteNetLib;
 using LiteNetLib.Utils;
@@ -17,8 +17,13 @@ namespace Back_End.Services
         private PlayerPositionService playerPositionService;
         private IMatchStore matchStore;
         private GameBroadcastService gameBroadcastService;
+        private JukeboxService jukebox;
 
-        public LobbyNetworkService(PlayerConnectionService playerConnections, ILogger<LobbyNetworkService> logger, ConnectionTicketService ticketService, PlayerPositionService playerPositionService, IMatchStore matchStore, GameBroadcastService gameBroadcastService)
+        // Skin đang mặc của từng người (chỉ truy cập trên luồng PollEvents)
+        private readonly Dictionary<string, byte> skins = new();
+        private const byte MAX_SKIN_ID = 63;
+
+        public LobbyNetworkService(PlayerConnectionService playerConnections, ILogger<LobbyNetworkService> logger, ConnectionTicketService ticketService, PlayerPositionService playerPositionService, IMatchStore matchStore, GameBroadcastService gameBroadcastService, JukeboxService jukebox)
         {
             playerConnectionService = playerConnections;
             this.logger = logger;
@@ -26,6 +31,7 @@ namespace Back_End.Services
             this.playerPositionService = playerPositionService;
             this.matchStore = matchStore;
             this.gameBroadcastService = gameBroadcastService;
+            this.jukebox = jukebox;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -90,6 +96,13 @@ namespace Back_End.Services
                     return;
                 }
 
+                // Người mới vào cần biết skin của những người đang có mặt
+                foreach (var entry in skins)
+                    peer.Send(SkinPacket(entry.Key, entry.Value), DeliveryMethod.ReliableOrdered);
+
+                // ...và bài Jukebox đang phát để nghe chung từ đúng đoạn đó
+                peer.Send(jukebox.StatePacket(), DeliveryMethod.ReliableOrdered);
+
                 logger.LogInformation(
                     "Authenticated: PlayerId {PlayerId}, ConnectionId {ConnectionId}",
                     playerId,
@@ -113,6 +126,7 @@ namespace Back_End.Services
                 if (playerId != null)
                 {
                     playerPositionService.Remove(playerId);
+                    skins.Remove(playerId);
 
                     var writer = new NetDataWriter();
                     writer.Put((byte)3);
@@ -165,24 +179,42 @@ namespace Back_End.Services
                         return;
                     }
 
-                    if (packetType != 1 || reader.AvailableBytes != 16)
+                    if (packetType == 6)
+                    {
+                        HandleSkin(playerId, reader);
+                        return;
+                    }
+
+                    if (packetType == 7)
+                    {
+                        HandleJukebox(reader);
+                        return;
+                    }
+
+                    // 16 byte = client cũ, 24 byte = kèm góc đầu (headYaw, headPitch)
+                    if (packetType != 1 || (reader.AvailableBytes != 16 && reader.AvailableBytes != 24))
                         return;
 
                     float x = reader.GetFloat();
                     float y = reader.GetFloat();
                     float z = reader.GetFloat();
                     float rotationY = reader.GetFloat();
+                    float headYaw = reader.AvailableBytes >= 8 ? reader.GetFloat() : 0f;
+                    float headPitch = reader.AvailableBytes >= 4 ? reader.GetFloat() : 0f;
 
                     if (!float.IsFinite(x) ||
                         !float.IsFinite(y) ||
                         !float.IsFinite(z) ||
-                        !float.IsFinite(rotationY))
+                        !float.IsFinite(rotationY) ||
+                        !float.IsFinite(headYaw) ||
+                        !float.IsFinite(headPitch))
                     {
                         return;
                     }
 
                     playerPositionService.Update(playerId, x, y, z, rotationY);
-                    BroadcastPlayerPosition(playerId, x, y, z, rotationY);
+                    BroadcastPlayerPosition(playerId, x, y, z, rotationY,
+                        Math.Clamp(headYaw, -120f, 120f), Math.Clamp(headPitch, -90f, 90f));
                 }
                 finally
                 {
@@ -215,6 +247,7 @@ namespace Back_End.Services
                 server.Stop();
                 playerConnectionService.Clear();
                 playerPositionService.Clear();
+                skins.Clear();
                 logger.LogInformation("LiteNetLib stopped");
             }
         }
@@ -272,7 +305,65 @@ namespace Back_End.Services
             gameBroadcastService.BroadcastHandAction(match, playerId, action, action == 2 ? count : (byte)0);
         }
 
-        private void BroadcastPlayerPosition(string playerId, float x, float y, float z, float rotationY)
+        /// <summary>
+        /// Client -> Server, Packet Type 6: byte skinId. Lưu lại và chuyển tiếp (packet 15) cho mọi người khác.
+        /// Server không biết danh sách skin, chỉ chặn giá trị quá lớn; client tự bỏ qua ID không có.
+        /// </summary>
+        private void HandleSkin(string playerId, NetPacketReader reader)
+        {
+            if (reader.AvailableBytes != 1)
+                return;
+
+            byte skinId = reader.GetByte();
+
+            if (skinId > MAX_SKIN_ID || (skins.TryGetValue(playerId, out byte old) && old == skinId))
+                return;
+
+            skins[playerId] = skinId;
+
+            var writer = SkinPacket(playerId, skinId);
+
+            foreach (var entry in playerConnectionService.GetAll())
+            {
+                if (entry.Key == playerId || entry.Value.ConnectionState != ConnectionState.Connected)
+                    continue;
+
+                entry.Value.Send(writer, DeliveryMethod.ReliableOrdered);
+            }
+        }
+
+        /// <summary>
+        /// Client -> Server, Packet Type 7: byte cmd (JukeboxService.Command), riêng Ended kèm int index.
+        /// JukeboxService tự broadcast packet 16 khi bài đổi.
+        /// </summary>
+        private void HandleJukebox(NetPacketReader reader)
+        {
+            if (reader.AvailableBytes < 1)
+                return;
+
+            var cmd = (JukeboxService.Command)reader.GetByte();
+
+            if (cmd == JukeboxService.Command.Ended)
+            {
+                if (reader.AvailableBytes == 4)
+                    jukebox.Handle(cmd, reader.GetInt());
+            }
+            else if (reader.AvailableBytes == 0)
+            {
+                jukebox.Handle(cmd);   // lệnh lạ bị Handle bỏ qua
+            }
+        }
+
+        private static NetDataWriter SkinPacket(string playerId, byte skinId)
+        {
+            var writer = new NetDataWriter();
+            writer.Put((byte)15);
+            writer.Put(playerId);
+            writer.Put(skinId);
+            return writer;
+        }
+
+        private void BroadcastPlayerPosition(string playerId, float x, float y, float z, float rotationY, float headYaw, float headPitch)
         {
             var writer = new NetDataWriter();
             writer.Put((byte)2);
@@ -282,6 +373,8 @@ namespace Back_End.Services
             writer.Put(y);
             writer.Put(z);
             writer.Put(rotationY);
+            writer.Put(headYaw);
+            writer.Put(headPitch);
 
             foreach (var entry in playerConnectionService.GetAll())
             {

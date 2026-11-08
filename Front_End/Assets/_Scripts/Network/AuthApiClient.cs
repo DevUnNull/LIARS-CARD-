@@ -11,11 +11,22 @@ public class AuthApiClient : Singleton<AuthApiClient>
     protected override void Awake()
     {
         base.Awake();
+        if (ServerConfig.IsSet) baseUrl = ServerConfig.ApiBaseUrl;
 
         if (Instance != this)
             return;
 
         DontDestroyOnLoad(gameObject);
+        StartCoroutine(LoadServerConfig());
+    }
+
+    private IEnumerator LoadServerConfig()
+    {
+        yield return ServerConfig.Fetch();
+        if (!ServerConfig.IsSet) yield break;
+        baseUrl = ServerConfig.ApiBaseUrl;
+        if (LiarsCard.Network.MatchApiClient.Instance != null) LiarsCard.Network.MatchApiClient.Instance.baseUrl = baseUrl;
+        if (NetworkManager.Instance != null) NetworkManager.Instance.ApplyServerConfig();
     }
 
     [SerializeField]
@@ -200,6 +211,8 @@ public class AuthApiClient : Singleton<AuthApiClient>
         bool authenticated,
         Action<bool, string> callback)
     {
+        yield return new WaitUntil(() => ServerConfig.Ready); // login/register đợi có địa chỉ server
+
         using (UnityWebRequest request = new UnityWebRequest(
             baseUrl + path, "POST"))
         {

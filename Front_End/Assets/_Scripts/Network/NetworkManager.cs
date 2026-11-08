@@ -33,9 +33,18 @@ public class NetworkManager : Singleton<NetworkManager>
 
     public bool IsConnected => serverPeer != null && serverPeer.ConnectionState == ConnectionState.Connected;
 
+    public void ApplyServerConfig()
+    {
+        if (!ServerConfig.IsSet) return;
+        apiBaseUrl = ServerConfig.ApiBaseUrl;
+        serverAddress = ServerConfig.UdpHost;
+        serverPort = ServerConfig.UdpPort;
+    }
+
     protected override void Awake()
     {
         base.Awake();
+        ApplyServerConfig();
 
         DontDestroyOnLoad(gameObject);
         isOwner = true;
@@ -46,6 +55,7 @@ public class NetworkManager : Singleton<NetworkManager>
         {
             serverPeer = peer;
             connectionError = null;
+            SendSkin((byte)PlayerSkin.SavedSkin);
 
             Debug.Log("Connected to server.");
         };
@@ -74,13 +84,16 @@ public class NetworkManager : Singleton<NetworkManager>
                         {
                             string playerId = reader.GetString(128);
 
-                            if (reader.AvailableBytes != 16)
+                            // 16 byte = server cũ chưa có góc đầu, 24 byte = kèm headYaw + headPitch
+                            if (reader.AvailableBytes != 16 && reader.AvailableBytes != 24)
                                 return;
 
                             float x = reader.GetFloat();
                             float y = reader.GetFloat();
                             float z = reader.GetFloat();
                             float rotationY = reader.GetFloat();
+                            float headYaw = reader.AvailableBytes >= 8 ? reader.GetFloat() : 0f;
+                            float headPitch = reader.AvailableBytes >= 4 ? reader.GetFloat() : 0f;
 
                             var manager = RemotePlayerManager.Instance;
 
@@ -90,7 +103,9 @@ public class NetworkManager : Singleton<NetworkManager>
                             manager.UpdateRemotePlayer(
                                 playerId,
                                 new Vector3(x, y, z),
-                                rotationY);
+                                rotationY,
+                                headYaw,
+                                headPitch);
 
                             break;
                         }
@@ -160,6 +175,27 @@ public class NetworkManager : Singleton<NetworkManager>
 
                             if (action == 2) RemoteHands.Instance.PlayCards(handPlayerId, count);
                             else RemoteHands.Instance.SetPeek(handPlayerId, action == 1);
+                            break;
+                        }
+
+                    case 15: // Skin của người chơi khác: playerId, skinId
+                        {
+                            string skinPlayerId = reader.GetString(128);
+                            byte skinId = reader.GetByte();
+
+                            if (RemotePlayerManager.Instance != null)
+                                RemotePlayerManager.Instance.SetRemoteSkin(skinPlayerId, skinId);
+                            break;
+                        }
+
+                    case 16: // Jukebox: playing, index bài, elapsedMs, volume (0..10)
+                        {
+                            bool playing = reader.GetBool();
+                            int trackIndex = reader.GetInt();
+                            long elapsedMs = reader.GetLong();
+                            byte volume = reader.GetByte();
+
+                            JukeboxItem.OnServerState(playing, trackIndex, elapsedMs, volume);
                             break;
                         }
 
@@ -326,7 +362,7 @@ public class NetworkManager : Singleton<NetworkManager>
         }
     }
 
-    public void SendPlayerTransform(Vector3 position, float rotationY)
+    public void SendPlayerTransform(Vector3 position, float rotationY, float headYaw, float headPitch)
     {
         if (!IsConnected)
             return;
@@ -339,6 +375,8 @@ public class NetworkManager : Singleton<NetworkManager>
         writer.Put(position.y);
         writer.Put(position.z);
         writer.Put(rotationY);
+        writer.Put(headYaw);
+        writer.Put(headPitch);
 
         serverPeer.Send(writer, DeliveryMethod.Sequenced);
     }
@@ -370,6 +408,33 @@ public class NetworkManager : Singleton<NetworkManager>
         writer.Put(action);
         writer.Put(count);
 
+        serverPeer.Send(writer, DeliveryMethod.ReliableOrdered);
+    }
+
+    /// <summary>Báo skin đang mặc (ID trong SkinCatalog) để server chuyển cho mọi người.</summary>
+    public void SendSkin(byte skinId)
+    {
+        if (!IsConnected)
+            return;
+
+        var writer = new NetDataWriter();
+
+        writer.Put((byte)6);
+        writer.Put(skinId);
+
+        serverPeer.Send(writer, DeliveryMethod.ReliableOrdered);
+    }
+
+    /// <summary>Jukebox: gửi lệnh (JukeboxCommand). Lệnh Ended (2) kèm số thứ tự bài vừa hết.</summary>
+    public void SendJukebox(byte cmd, int endedIndex = 0)
+    {
+        if (!IsConnected)
+            return;
+
+        var writer = new NetDataWriter();
+        writer.Put((byte)7);
+        writer.Put(cmd);
+        if (cmd == (byte)JukeboxCommand.Ended) writer.Put(endedIndex);
         serverPeer.Send(writer, DeliveryMethod.ReliableOrdered);
     }
 
