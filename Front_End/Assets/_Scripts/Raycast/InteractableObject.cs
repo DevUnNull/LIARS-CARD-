@@ -12,5 +12,10 @@ public enum InteractableType
 {
     None,
     Chair,
-    Mirror
+    Mirror,
+    Jukebox,            // nút Phát / Dừng
+    JukeboxNext,
+    JukeboxPrev,
+    JukeboxVolumeUp,
+    JukeboxVolumeDown
 }

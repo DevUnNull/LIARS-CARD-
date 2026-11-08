@@ -188,6 +188,17 @@ public class NetworkManager : Singleton<NetworkManager>
                             break;
                         }
 
+                    case 16: // Jukebox: playing, index bài, elapsedMs, volume (0..10)
+                        {
+                            bool playing = reader.GetBool();
+                            int trackIndex = reader.GetInt();
+                            long elapsedMs = reader.GetLong();
+                            byte volume = reader.GetByte();
+
+                            JukeboxItem.OnServerState(playing, trackIndex, elapsedMs, volume);
+                            break;
+                        }
+
                     case 12: // Trigger Result Broadcast
                         {
                             string penalizedPlayerId = reader.GetString();
@@ -411,6 +422,19 @@ public class NetworkManager : Singleton<NetworkManager>
         writer.Put((byte)6);
         writer.Put(skinId);
 
+        serverPeer.Send(writer, DeliveryMethod.ReliableOrdered);
+    }
+
+    /// <summary>Jukebox: gửi lệnh (JukeboxCommand). Lệnh Ended (2) kèm số thứ tự bài vừa hết.</summary>
+    public void SendJukebox(byte cmd, int endedIndex = 0)
+    {
+        if (!IsConnected)
+            return;
+
+        var writer = new NetDataWriter();
+        writer.Put((byte)7);
+        writer.Put(cmd);
+        if (cmd == (byte)JukeboxCommand.Ended) writer.Put(endedIndex);
         serverPeer.Send(writer, DeliveryMethod.ReliableOrdered);
     }
 

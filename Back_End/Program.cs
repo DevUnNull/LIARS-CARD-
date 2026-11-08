@@ -168,6 +168,7 @@ builder.Services.AddHostedService<LobbyNetworkService>();
 builder.Services.AddSingleton<ConnectionTicketService>();
 builder.Services.AddSingleton<PlayerPositionService>();
 builder.Services.AddSingleton<GameBroadcastService>();
+builder.Services.AddSingleton<JukeboxService>(sp => new JukeboxService(sp.GetRequiredService<PlayerConnectionService>()));
 
 var app = builder.Build();
 

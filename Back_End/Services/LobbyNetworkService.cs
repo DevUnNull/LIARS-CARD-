@@ -17,12 +17,13 @@ namespace Back_End.Services
         private PlayerPositionService playerPositionService;
         private IMatchStore matchStore;
         private GameBroadcastService gameBroadcastService;
+        private JukeboxService jukebox;
 
         // Skin đang mặc của từng người (chỉ truy cập trên luồng PollEvents)
         private readonly Dictionary<string, byte> skins = new();
         private const byte MAX_SKIN_ID = 63;
 
-        public LobbyNetworkService(PlayerConnectionService playerConnections, ILogger<LobbyNetworkService> logger, ConnectionTicketService ticketService, PlayerPositionService playerPositionService, IMatchStore matchStore, GameBroadcastService gameBroadcastService)
+        public LobbyNetworkService(PlayerConnectionService playerConnections, ILogger<LobbyNetworkService> logger, ConnectionTicketService ticketService, PlayerPositionService playerPositionService, IMatchStore matchStore, GameBroadcastService gameBroadcastService, JukeboxService jukebox)
         {
             playerConnectionService = playerConnections;
             this.logger = logger;
@@ -30,6 +31,7 @@ namespace Back_End.Services
             this.playerPositionService = playerPositionService;
             this.matchStore = matchStore;
             this.gameBroadcastService = gameBroadcastService;
+            this.jukebox = jukebox;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -97,6 +99,9 @@ namespace Back_End.Services
                 // Người mới vào cần biết skin của những người đang có mặt
                 foreach (var entry in skins)
                     peer.Send(SkinPacket(entry.Key, entry.Value), DeliveryMethod.ReliableOrdered);
+
+                // ...và bài Jukebox đang phát để nghe chung từ đúng đoạn đó
+                peer.Send(jukebox.StatePacket(), DeliveryMethod.ReliableOrdered);
 
                 logger.LogInformation(
                     "Authenticated: PlayerId {PlayerId}, ConnectionId {ConnectionId}",
@@ -177,6 +182,12 @@ namespace Back_End.Services
                     if (packetType == 6)
                     {
                         HandleSkin(playerId, reader);
+                        return;
+                    }
+
+                    if (packetType == 7)
+                    {
+                        HandleJukebox(reader);
                         return;
                     }
 
@@ -318,6 +329,28 @@ namespace Back_End.Services
                     continue;
 
                 entry.Value.Send(writer, DeliveryMethod.ReliableOrdered);
+            }
+        }
+
+        /// <summary>
+        /// Client -> Server, Packet Type 7: byte cmd (JukeboxService.Command), riêng Ended kèm int index.
+        /// JukeboxService tự broadcast packet 16 khi bài đổi.
+        /// </summary>
+        private void HandleJukebox(NetPacketReader reader)
+        {
+            if (reader.AvailableBytes < 1)
+                return;
+
+            var cmd = (JukeboxService.Command)reader.GetByte();
+
+            if (cmd == JukeboxService.Command.Ended)
+            {
+                if (reader.AvailableBytes == 4)
+                    jukebox.Handle(cmd, reader.GetInt());
+            }
+            else if (reader.AvailableBytes == 0)
+            {
+                jukebox.Handle(cmd);   // lệnh lạ bị Handle bỏ qua
             }
         }
 
