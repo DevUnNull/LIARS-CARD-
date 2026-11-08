@@ -13,8 +13,11 @@ public class JukeboxButton : Item
     [SerializeField] private JukeboxCommand command = JukeboxCommand.PlayStop;
 
     [Header("Hiệu Ứng Bấm")]
-    [Tooltip("Độ lún của nút khi bấm (mét), theo hướng ngược trục Z (forward) của nút.")]
+    [Tooltip("Độ lún của nút khi bấm (mét), theo hướng Press Axis.")]
     [SerializeField, Min(0f)] private float pressDepth = 0.015f;
+
+    [Tooltip("Hướng nút lún vào, theo trục local của nút. Nút cube cũ: (0,0,-1). Phím model Jukebox_3500: (0,1,0).")]
+    [SerializeField] private Vector3 pressAxis = Vector3.back;
 
     [Tooltip("Thời gian nút giữ trạng thái lún (giây).")]
     [SerializeField, Min(0f)] private float pressTime = 0.12f;
@@ -29,6 +32,7 @@ public class JukeboxButton : Item
         if (command == JukeboxCommand.Ended) return;   // lệnh nội bộ, không gán cho nút
 
         JukeboxItem.Command(command);
+        GameAudio.PlayAt("ButtonPress", transform.position, 0.8f, 0f, 10f);
         StopAllCoroutines();
         StartCoroutine(Press());
     }
@@ -36,7 +40,7 @@ public class JukeboxButton : Item
     private IEnumerator Press()
     {
         transform.localPosition = restPosition;
-        transform.position -= transform.forward * pressDepth;
+        transform.position += transform.TransformDirection(pressAxis.normalized) * pressDepth;
         yield return new WaitForSeconds(pressTime);
         transform.localPosition = restPosition;
     }

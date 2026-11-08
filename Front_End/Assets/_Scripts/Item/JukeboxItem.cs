@@ -24,6 +24,10 @@ public class JukeboxItem : MonoBehaviour
     [Tooltip("Âm lượng của loa khi nút âm lượng ở mức cao nhất (10/10). Khoảng 0 - 1.")]
     [SerializeField, Range(0f, 1f)] private float maxVolume = 1f;
 
+    [Header("Hoạt Ảnh")]
+    [Tooltip("Animator của model Jukebox_3500 (state Play_Music / Stop_Music: hạ / nhấc cần đĩa). Để trống nếu không có.")]
+    [SerializeField] private Animator animator;
+
     // Trạng thái mới nhất từ server; để static vì packet có thể tới trước khi scene có Jukebox
     private static bool statePlaying;
     private static int stateIndex;
@@ -32,6 +36,9 @@ public class JukeboxItem : MonoBehaviour
     private static float stateReceivedAt;
 
     private static JukeboxItem instance;
+
+    /// <summary>Jukebox đang phát nhạc (GameAudio dùng để nhỏ nhạc nền).</summary>
+    public static bool IsPlaying => statePlaying;
 
     private bool isPlaying;
     private int playingIndex;
@@ -73,6 +80,7 @@ public class JukeboxItem : MonoBehaviour
     private void Reset()
     {
         speaker = GetComponent<AudioSource>();
+        animator = GetComponent<Animator>();
     }
 
     private void Awake()
@@ -105,6 +113,8 @@ public class JukeboxItem : MonoBehaviour
         // Chỉ đổi âm lượng thì không phát lại bài
         if (statePlaying == isPlaying && (!statePlaying || stateIndex == playingIndex)) return;
 
+        // Controller không có transition nên gọi thẳng state; đổi bài khi đang phát thì giữ nguyên cần đĩa
+        if (animator != null && statePlaying != isPlaying) animator.Play(statePlaying ? "Play_Music" : "Stop_Music");
         isPlaying = statePlaying;
         playingIndex = stateIndex;
         speaker.Stop();

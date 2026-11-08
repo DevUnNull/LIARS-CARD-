@@ -21,6 +21,12 @@ public class CharacterAnimator : MonoBehaviour
     [Tooltip("Thời gian chuyển giữa 2 animation (giây).")]
     [SerializeField, Range(0f, 0.5f)] private float crossFade = 0.15f;
 
+    [Header("Âm Thanh")]
+    [Tooltip("Quãng đường đi được giữa 2 tiếng bước chân (mét). Khuyến nghị 1.2 - 1.8.")]
+    [SerializeField, Min(0.1f)] private float stepDistance = 1.5f;
+    [Tooltip("Âm lượng tiếng bước chân (0 - 1).")]
+    [SerializeField, Range(0f, 1f)] private float footstepVolume = 0.45f;
+
     [Header("Quay Đầu")]
     [Tooltip("Tốc độ đầu đuổi theo góc nhìn (càng lớn càng bám sát). Khuyến nghị 10 - 20.")]
     [SerializeField, Min(1f)] private float headFollow = 14f;
@@ -31,6 +37,7 @@ public class CharacterAnimator : MonoBehaviour
     private float standY;
     private Vector3 lastPos;
     private float speed;
+    private float stepTravel;
     private bool alive = true;
     private string current;
     private ChairItem[] chairs;
@@ -103,6 +110,16 @@ public class CharacterAnimator : MonoBehaviour
         lastPos = p;
         if (Time.deltaTime > 0f) speed = Mathf.Lerp(speed, d.magnitude / Time.deltaTime, 10f * Time.deltaTime);
 
+        if (current == "walk")
+        {
+            stepTravel += Mathf.Min(d.magnitude, 0.5f);   // bỏ qua cú dịch chuyển tức thời (ngồi xuống, hồi sinh)
+            if (stepTravel >= stepDistance)
+            {
+                stepTravel = 0f;
+                GameAudio.PlayAt("Footstep", p, footstepVolume, 0f, 15f);
+            }
+        }
+
         ChairItem chair = alive ? FindSeat(p) : null;
         Vector3 lp = model.localPosition;
         lp.y = chair != null ? chair.SeatTopY - p.y - sitHipHeight : standY;
@@ -128,6 +145,13 @@ public class CharacterAnimator : MonoBehaviour
     private void Play(string state)
     {
         if (state == current) return;
+
+        // Cầm súng vẫn là đang ngồi; lần đầu (vừa xuất hiện) thì không kêu
+        bool wasSeated = current == "sit" || current == "gun";
+        bool seated = state == "sit" || state == "gun";
+        if (current != null && seated != wasSeated && state != "die")
+            GameAudio.PlayAt(seated ? "SitDown" : "StandUp", transform.position, 0.8f, 0f, 15f);
+
         current = state;
         animator.CrossFadeInFixedTime(state, crossFade);
     }

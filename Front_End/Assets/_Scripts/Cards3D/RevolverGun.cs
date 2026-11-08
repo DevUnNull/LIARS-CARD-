@@ -186,7 +186,7 @@ namespace LiarsCard.Cards3D
             mode = Mode.Hold;
 
             // 2. Lên đạn: búa ngửa ra sau, ổ đạn xoay 1 nấc, "cạch"
-            PlaySfx("DryFire");
+            PlaySfx("GunCock");
             for (float t = 0f; t < cockDuration; t += Time.deltaTime)
             {
                 float k = Mathf.SmoothStep(0f, 1f, t / cockDuration);

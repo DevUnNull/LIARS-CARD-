@@ -26,7 +26,7 @@ public class MirrorItem : Item
         var player = PlayerController.Instance;
         if (player == null || !player.TryGetComponent(out skin) || skin.Catalog == null || skin.Catalog.Count == 0) return;
 
-        if (panel == null) BuildPanel();
+        if (panel == null) { BuildPanel(); GameAudio.HookButtons(panel); }
         originalSkin = skin.Current;
         panel.SetActive(true);
         player.firstPersonMovement.enabled = false;
@@ -38,6 +38,7 @@ public class MirrorItem : Item
     {
         int count = skin.Catalog.Count;
         skin.SetSkin(((skin.Current + dir) % count + count) % count);
+        GameAudio.Play2D("Cloth", 0.7f);
         Refresh();
     }
 

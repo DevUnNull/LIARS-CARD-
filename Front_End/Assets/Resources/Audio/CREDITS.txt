@@ -1,0 +1,16 @@
+Âm thanh trong thư mục này đều là CC0 (public domain) — được dùng tự do, kể cả thương mại, không bắt buộc ghi công.
+
+Sfx (Kenney - www.kenney.nl, CC0):
+  Casino Audio      -> CardShuffle, CardSnap, CardThrow, CardImpact
+  RPG Audio         -> PlayerJoin, PlayerLeave, SitDown, StandUp, Cloth, WinCoins, GunCock/metalLatch, DryFire/metalClick
+  Impact Sounds     -> Footstep, AmbientGlass, MatchEnd
+  Interface Sounds  -> UiClick, ButtonPress, DialogueBlip
+
+Sfx (OpenGameArt.org, CC0):
+  Gunshot  <- "Gunshots" (Black Powder.wav)           https://opengameart.org/content/gunshots
+  GunCock/hammer_cock, DryFire/dry_click <- "Equipment Clicks III"   https://opengameart.org/content/equipment-clicks-iii
+
+Music (OpenGameArt.org, CC0):
+  drunken_saloon.mp3  <- "Drunken Saloon" (iamoneabe)  https://opengameart.org/content/drunken-saloon
+  old_west_style.ogg  <- "Old West Style"              https://opengameart.org/content/old-west-style
+  richer.mp3          <- "Richer" (Pro Sensory)        https://opengameart.org/content/richer
