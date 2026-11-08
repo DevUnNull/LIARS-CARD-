@@ -96,6 +96,8 @@ namespace LiarsCard.Cards3D
                 var l = GetLabel(p.playerId);
                 l.shot = Mathf.Clamp(p.shotCount, 1, 6);
                 l.alive = p.isAlive;
+                if (RemotePlayerManager.Instance != null && RemotePlayerManager.Instance.TryGetRemote(p.playerId, out var avatar))
+                    if (avatar.TryGetComponent<CharacterAnimator>(out var anim)) anim.SetAlive(p.isAlive);
                 if (p.shotCount > 1) l.fired = true;
             }
         }

@@ -4,7 +4,8 @@ public class RaycastSource : Singleton<RaycastSource>
 {
     public InteractableObject currentObject;
 
-    [SerializeField] private float distance = 1.0f;
+    [Tooltip("Tầm tia tối đa (mét). Mỗi vật tự giới hạn thêm bằng InteractableObject.maxDistance.")]
+    [SerializeField] private float distance = 3.0f;
 
     protected override void Awake()
     {
@@ -23,15 +24,14 @@ public class RaycastSource : Singleton<RaycastSource>
         
         if (Physics.Raycast(ray, out RaycastHit hit, distance))
         {
-            if (!hit.collider.CompareTag("InteractableObject"))
+            // Trúng tường / vật thường, hoặc vật ở xa hơn tầm riêng của nó -> coi như không nhắm gì
+            InteractableObject obj = hit.collider.CompareTag("InteractableObject") ? hit.collider.GetComponent<InteractableObject>() : null;
+            if (obj != null && hit.distance <= obj.maxDistance)
             {
-                return;
+                FirstPersonCanvas.Instance.ShowText(obj.interactableType);
+                currentObject = obj;
+                hitInteractable = true;
             }
-
-            InteractableObject obj = hit.collider.GetComponent<InteractableObject>();
-            FirstPersonCanvas.Instance.ShowText(obj.interactableType);
-            currentObject = obj;
-            hitInteractable = true;
         }
 
         if (!hitInteractable)

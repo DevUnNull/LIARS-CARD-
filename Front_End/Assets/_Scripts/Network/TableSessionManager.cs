@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using UnityEngine;
 using LiarsCard.Network;
@@ -91,6 +91,7 @@ public class TableSessionManager : Singleton<TableSessionManager>
     {
         isSeated = false;
         isInCardBattle = false;
+        if (PlayerController.Instance != null) PlayerController.Instance.firstPersonLook.LockBody(false);
         currentTableId = 0;
         currentSeatIndex = -1;
         currentMatchId = null;

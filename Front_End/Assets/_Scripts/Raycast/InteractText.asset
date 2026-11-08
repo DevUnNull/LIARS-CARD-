@@ -15,3 +15,5 @@ MonoBehaviour:
   list:
   - InteractableType: 1
     interactText: Press E to sit
+  - InteractableType: 2
+    interactText: "Nh\u1EA5n E \u0111\u1EC3 thay trang ph\u1EE5c"

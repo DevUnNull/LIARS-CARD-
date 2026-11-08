@@ -26,6 +26,8 @@ namespace LiarsCard.Cards3D
         public Vector3 templeLocal = new Vector3(0.09f, 0.03f, 0f);
         public Vector3 barrelDirLocal = new Vector3(-0.55f, -0.05f, -0.83f);
         public float headAboveRoot = 0.6f;     // camera cách gốc nhân vật 0.6m (giống Player)
+        [Tooltip("Nửa bề rộng đầu model nhân vật (mét): súng của người chơi khác được dí vào mặt bên đầu model.")]
+        public float avatarHeadHalfWidth = 0.4f;
 
         [Header("Thời gian (giây) và góc")]
         public float liftDuration = 0.9f;
@@ -353,11 +355,24 @@ namespace LiarsCard.Cards3D
             var remotes = RemotePlayerManager.Instance;
             if (remotes != null && remotes.TryGetRemote(holderId, out var avatar))
             {
-                head = avatar.position + Vector3.up * headAboveRoot;
                 headRot = Quaternion.Euler(remotePitchCur, avatar.eulerAngles.y, 0f);
+                // Model nhân vật đầu to: dí súng vào mặt bên của đầu model (chỗ nắm tay ở clip gun-to-head)
+                if (avatar.TryGetComponent<CharacterAnimator>(out var anim) && anim.TryGetHeadCenter(out var center))
+                    head = center + avatar.right * avatarHeadHalfWidth;
+                else
+                    head = avatar.position + Vector3.up * headAboveRoot;
                 return true;
             }
             return false;
+        }
+
+        /// <summary>Người chơi có avatar này đang nhấc súng dí vào đầu (để CharacterAnimator chơi clip gun-to-head).</summary>
+        public bool IsHeldBy(Transform avatar)
+        {
+            if (string.IsNullOrEmpty(holderId) || (mode != Mode.Lift && mode != Mode.Hold)) return false;
+            if (holderIsMe) return avatar.GetComponent<PlayerController>() != null;
+            var remotes = RemotePlayerManager.Instance;
+            return remotes != null && remotes.TryGetRemote(holderId, out var a) && a == avatar;
         }
 
         private static Camera LocalCamera()

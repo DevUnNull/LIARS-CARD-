@@ -18,3 +18,9 @@ Thumbs.db
 *.zip
 *.tar.gz
 *.7z
+
+# Deploy secrets & build output
+Back_End/deploy/server.env
+Back_End/deploy/out/
+Back_End/deploy/app.tgz
+Back_End/deploy/tunnel.log

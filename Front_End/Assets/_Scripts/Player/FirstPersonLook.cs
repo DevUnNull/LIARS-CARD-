@@ -13,10 +13,35 @@ public class FirstPersonLook : MonoBehaviour
 
     private InputPlayer input;
 
+    [Header("Ngồi Ở Bàn")]
+    [Tooltip("Góc quay đầu tối đa sang trái/phải khi đang ngồi (độ). Thân người bị khóa.")]
+    [SerializeField, Range(10f, 120f)] private float maxHeadYaw = 75f;
+    [Tooltip("Góc ngẩng/cúi đầu tối đa khi đang ngồi (độ).")]
+    [SerializeField, Range(10f, 89f)] private float maxHeadPitch = 60f;
+
+    private bool bodyLocked;
+    private float bodyYaw;
+    private CharacterAnimator characterAnimator;
+
+    /// <summary>Góc quay đầu so với thân (độ, + = phải). Chỉ khác 0 khi đang ngồi.</summary>
+    public float HeadYaw => bodyLocked ? velocity.x - bodyYaw : 0f;
+    /// <summary>Góc cúi đầu (độ, + = cúi xuống), giống trục X của camera.</summary>
+    public float HeadPitch => -velocity.y;
+
     private void Awake()
     {
         input = new InputPlayer();
         playerCamera = GetComponentInChildren<Camera>();
+        characterAnimator = GetComponent<CharacterAnimator>();
+    }
+
+    /// <summary>Ngồi vào bàn: khóa thân theo hướng hiện tại, chuột chỉ xoay đầu. Đứng dậy: mở khóa.</summary>
+    public void LockBody(bool locked)
+    {
+        bodyLocked = locked;
+        bodyYaw = velocity.x;
+        frameVelocity = Vector2.zero;
+        ApplyRotation();
     }
 
     private void OnEnable()
@@ -37,10 +62,11 @@ public class FirstPersonLook : MonoBehaviour
     void Update()
     {
         // Khi chuột đang mở khóa (đang tương tác UI Canvas bàn chơi / lobby) -> không xoay camera theo chuột
-        if (Cursor.lockState != CursorLockMode.Locked) return;
+        if (Cursor.lockState == CursorLockMode.Locked)
+            RotateCamera(HandleInput());
 
-        Vector2 mouseDelta = HandleInput();
-        RotateCamera(mouseDelta);
+        // Model nhân vật (bóng / gương / người khác qua mạng) quay đầu theo
+        if (characterAnimator != null) characterAnimator.SetHeadLook(HeadYaw, HeadPitch);
     }
 
     private Vector2 HandleInput()
@@ -83,12 +109,22 @@ public class FirstPersonLook : MonoBehaviour
             1f / Mathf.Max(1f, smoothing));
 
         velocity += frameVelocity;
-        velocity.y = Mathf.Clamp(velocity.y, -90f, 90f);
+        if (bodyLocked)
+        {
+            velocity.x = Mathf.Clamp(velocity.x, bodyYaw - maxHeadYaw, bodyYaw + maxHeadYaw);
+            velocity.y = Mathf.Clamp(velocity.y, -maxHeadPitch, maxHeadPitch);
+        }
+        else velocity.y = Mathf.Clamp(velocity.y, -90f, 90f);
 
+        ApplyRotation();
+    }
+
+    // Đứng: thân quay theo chuột, camera chỉ ngẩng/cúi. Ngồi: thân đứng yên, camera quay cả trái/phải.
+    private void ApplyRotation()
+    {
+        float bodyAngle = bodyLocked ? bodyYaw : velocity.x;
+        transform.localRotation = Quaternion.AngleAxis(bodyAngle, Vector3.up);
         playerCamera.transform.localRotation =
-            Quaternion.AngleAxis(-velocity.y, Vector3.right);
-
-        transform.localRotation =
-            Quaternion.AngleAxis(velocity.x, Vector3.up);
+            Quaternion.AngleAxis(velocity.x - bodyAngle, Vector3.up) * Quaternion.AngleAxis(-velocity.y, Vector3.right);
     }
 }

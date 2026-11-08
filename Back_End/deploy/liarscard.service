@@ -1,0 +1,16 @@
+[Unit]
+Description=Liars Card backend (API :5000, UDP :9050)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=liarscard
+WorkingDirectory=/opt/liarscard
+ExecStart=/opt/liarscard/Back_End
+EnvironmentFile=/etc/liarscard.env
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
