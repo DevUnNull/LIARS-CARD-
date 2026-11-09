@@ -34,13 +34,10 @@ public class FirstPersonMovement : MonoBehaviour
         playerInput.Disable();
     }
 
+    // CharacterController không có interpolation: Move trong FixedUpdate (50Hz) làm camera khựng khi FPS > 50
     private void Update()
     {
         temp = HandleInput();
-    }
-
-    private void FixedUpdate()
-    {
         MovePlayer(temp);
     }
 
@@ -52,6 +49,6 @@ public class FirstPersonMovement : MonoBehaviour
     private void MovePlayer(Vector2 moveVec)
     {
         Vector3 move = transform.right * moveVec.x + transform.forward * moveVec.y + Vector3.down * gravity;
-        characterController.Move(moveSpeed * Time.fixedDeltaTime * move);
+        characterController.Move(moveSpeed * Time.deltaTime * move);
     }
 }

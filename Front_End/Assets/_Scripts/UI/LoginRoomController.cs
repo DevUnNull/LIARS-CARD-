@@ -289,12 +289,22 @@ public class LoginRoomController : MonoBehaviour
         dialogueText.ForceMeshUpdate();
         int total = dialogueText.textInfo.characterCount;
         float shown = 0f;
+        int blipped = 0;
         yield return null;
         while (shown < total)
         {
             if (SkipPressed()) break;
             shown += Time.deltaTime * charsPerSecond;
-            dialogueText.maxVisibleCharacters = (int)shown;
+            int visible = Mathf.Min((int)shown, total);
+            dialogueText.maxVisibleCharacters = visible;
+
+            // Tiếng "tạch" khi có chữ mới hiện (bỏ qua dấu cách); minInterval giữ nhịp ~20 tiếng/giây dù chữ chạy nhanh
+            if (visible > blipped)
+            {
+                blipped = visible;
+                if (!char.IsWhiteSpace(dialogueText.textInfo.characterInfo[visible - 1].character))
+                    GameAudio.Play2D("DialogueBlip", 0.5f, 0.05f);
+            }
             yield return null;
         }
         dialogueText.maxVisibleCharacters = int.MaxValue;

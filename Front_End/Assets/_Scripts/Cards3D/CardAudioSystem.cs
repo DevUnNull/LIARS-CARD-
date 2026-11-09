@@ -144,6 +144,12 @@ namespace LiarsCard.Cards3D
 
                 Destroy(sfxObj, clip.length + 0.3f);
             }
+            else if (GameAudio.Has(soundName))
+            {
+                // File thật trong Resources/Audio/Sfx (súng thuốc đen, lên cò, cò hụt...); tiếng súng vang khắp quán
+                bool loud = soundName.Equals("Gunshot", StringComparison.OrdinalIgnoreCase);
+                GameAudio.PlayAt(soundName, worldPosition, 1f, 0f, loud ? 50f : 25f);
+            }
             else
             {
                 // Fallback procedural sounds
@@ -198,6 +204,8 @@ namespace LiarsCard.Cards3D
 
         public void PlayShuffle()
         {
+            if (GameAudio.Has("CardShuffle")) { GameAudio.Play2D("CardShuffle", 0.6f, 0.03f); return; }
+
             if (audioSource2D != null && clipShuffle != null)
             {
                 audioSource2D.pitch = UnityEngine.Random.Range(0.95f, 1.08f);
@@ -207,6 +215,8 @@ namespace LiarsCard.Cards3D
 
         public void PlaySnap()
         {
+            if (GameAudio.Has("CardSnap")) { GameAudio.Play2D("CardSnap", 0.7f, 0.03f); return; }
+
             if (audioSource2D != null && clipSnap != null)
             {
                 audioSource2D.pitch = UnityEngine.Random.Range(0.92f, 1.12f);
@@ -216,6 +226,8 @@ namespace LiarsCard.Cards3D
 
         public void PlayThrow()
         {
+            if (GameAudio.Has("CardThrow")) { GameAudio.Play2D("CardThrow", 0.75f, 0.03f); return; }
+
             if (audioSource2D != null && clipThrow != null)
             {
                 audioSource2D.pitch = UnityEngine.Random.Range(0.95f, 1.05f);
@@ -225,6 +237,8 @@ namespace LiarsCard.Cards3D
 
         public void PlayTableImpact()
         {
+            if (GameAudio.Has("CardImpact")) { GameAudio.Play2D("CardImpact", 0.85f, 0.03f); return; }
+
             if (audioSource2D != null && clipFeltImpact != null)
             {
                 audioSource2D.pitch = UnityEngine.Random.Range(0.9f, 1.05f);
