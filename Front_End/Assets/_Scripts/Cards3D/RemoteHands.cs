@@ -184,7 +184,14 @@ namespace LiarsCard.Cards3D
                 if (h.anchor != null) Destroy(h.anchor.gameObject);
             }
             hands.Clear();
-            foreach (var l in labels.Values) if (l.text != null) Destroy(l.text.gameObject);
+            var remotes = RemotePlayerManager.Instance;
+            foreach (var kv in labels)
+            {
+                if (kv.Value.text != null) Destroy(kv.Value.text.gameObject);
+                // Hết trận / vào trận mới: dựng lại người đã chết, nếu không avatar kẹt ở animation "die"
+                if (remotes != null && remotes.TryGetRemote(kv.Key, out var avatar) && avatar.TryGetComponent<CharacterAnimator>(out var anim))
+                    anim.SetAlive(true);
+            }
             labels.Clear();
         }
 

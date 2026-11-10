@@ -31,8 +31,8 @@ public static class ScreenSetup
             if (!canvas.TryGetComponent(out CanvasScaler scaler)) scaler = canvas.gameObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
+            // Expand: khung 1920x1080 luôn nằm gọn trong màn hình (16:10 laptop không bị tràn mép như Match 0.5)
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
         }
     }
 }

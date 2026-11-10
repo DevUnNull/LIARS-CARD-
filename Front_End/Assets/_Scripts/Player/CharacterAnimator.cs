@@ -75,6 +75,10 @@ public class CharacterAnimator : MonoBehaviour
 
     public void SetAlive(bool value) => alive = value;
 
+    private bool celebrating;
+    /// <summary>Người thắng: đứng dậy giơ tay ăn mừng (clip "cheer") cho tới khi tắt.</summary>
+    public void SetCelebrating(bool value) => celebrating = value;
+
     /// <summary>Góc nhìn của người chơi: yaw so với thân (+ = phải), pitch (+ = cúi). Local lấy từ chuột, remote từ mạng.</summary>
     public void SetHeadLook(float yaw, float pitch)
     {
@@ -120,14 +124,15 @@ public class CharacterAnimator : MonoBehaviour
             }
         }
 
-        ChairItem chair = alive ? FindSeat(p) : null;
+        bool cheer = alive && celebrating;
+        ChairItem chair = alive && !cheer ? FindSeat(p) : null;
         Vector3 lp = model.localPosition;
         lp.y = chair != null ? chair.SeatTopY - p.y - sitHipHeight : standY;
         model.localPosition = lp;
 
         var gun = LiarsCard.Cards3D.RevolverGun.Instance;
         bool holdingGun = alive && gun != null && gun.IsHeldBy(transform);
-        Play(!alive ? "die" : holdingGun ? "gun" : chair != null ? "sit" : speed > walkSpeedThreshold ? "walk" : "idle");
+        Play(!alive ? "die" : cheer ? "cheer" : holdingGun ? "gun" : chair != null ? "sit" : speed > walkSpeedThreshold ? "walk" : "idle");
     }
 
     private ChairItem FindSeat(Vector3 p)

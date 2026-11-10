@@ -162,6 +162,8 @@ public class NetworkManager : Singleton<NetworkManager>
                             byte stage = reader.GetByte();
                             float pitch = reader.GetFloat();
 
+                            // Gói của trận mình đã rời (vẫn nằm trong danh sách trận trên server) => bỏ qua
+                            if (CardBattleUI.Instance == null || !CardBattleUI.Instance.IsInBattle) break;
                             var gun = RevolverGun.Instance;
                             if (gun != null) gun.OnRemoteGunPose(holderId, stage, pitch);
                             break;
@@ -173,6 +175,7 @@ public class NetworkManager : Singleton<NetworkManager>
                             byte action = reader.GetByte();
                             byte count = reader.GetByte();
 
+                            if (CardBattleUI.Instance == null || !CardBattleUI.Instance.IsInBattle) break;
                             if (action == 2) RemoteHands.Instance.PlayCards(handPlayerId, count);
                             else RemoteHands.Instance.SetPeek(handPlayerId, action == 1);
                             break;

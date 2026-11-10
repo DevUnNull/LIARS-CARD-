@@ -1,9 +1,6 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
-using UnityEngine.Networking;
 
 namespace LiarsCard.Cards3D
 {
@@ -58,8 +55,13 @@ namespace LiarsCard.Cards3D
             // Đăng ký các clip đã gán từ trước nếu có
             RegisterInspectorClips();
 
-            // Load các file âm thanh có sẵn trong Assets/Audio/Card/
-            StartCoroutine(LoadAudioClipsFromDisk());
+            // Phải nằm trong Resources mới có trong bản build (đọc file từ Assets/ chỉ chạy được trong Editor)
+            foreach (var n in new[] { "Danh_1", "Danh_2", "Dnah_3", "To" })
+                if (!loadedClips.ContainsKey(n))
+                {
+                    var clip = Resources.Load<AudioClip>("Audio/Card/" + n);
+                    if (clip != null) loadedClips[n] = clip;
+                }
         }
 
         private void RegisterInspectorClips()
@@ -72,52 +74,6 @@ namespace LiarsCard.Cards3D
                 loadedClips["Dnah_3"] = clipDanh3;
             }
             if (clipTo != null) loadedClips["To"] = clipTo;
-        }
-
-        private IEnumerator LoadAudioClipsFromDisk()
-        {
-            string audioDir = Path.Combine(Application.dataPath, "Audio", "Card");
-            if (!Directory.Exists(audioDir)) yield break;
-
-            yield return StartCoroutine(LoadClipRoutine("Danh_1", Path.Combine(audioDir, "Danh_1.mp3")));
-            yield return StartCoroutine(LoadClipRoutine("Danh_2", Path.Combine(audioDir, "Danh_2.mp3")));
-            yield return StartCoroutine(LoadClipRoutine("Dnah_3", Path.Combine(audioDir, "Dnah_3.mp3")));
-            yield return StartCoroutine(LoadClipRoutine("To", Path.Combine(audioDir, "To.mp3")));
-
-            if (loadedClips.ContainsKey("Dnah_3") && !loadedClips.ContainsKey("Danh_3"))
-            {
-                loadedClips["Danh_3"] = loadedClips["Dnah_3"];
-            }
-        }
-
-        private IEnumerator LoadClipRoutine(string clipName, string fullPath)
-        {
-            if (loadedClips.ContainsKey(clipName) && loadedClips[clipName] != null) yield break;
-            if (!File.Exists(fullPath)) yield break;
-
-            string uri = "file://" + fullPath.Replace('\\', '/');
-            using (UnityWebRequest req = UnityWebRequestMultimedia.GetAudioClip(uri, AudioType.MPEG))
-            {
-                yield return req.SendWebRequest();
-
-                if (req.result == UnityWebRequest.Result.Success)
-                {
-                    AudioClip clip = DownloadHandlerAudioClip.GetContent(req);
-                    if (clip != null)
-                    {
-                        clip.name = clipName;
-                        loadedClips[clipName] = clip;
-
-                        // Đồng bộ gán vào serialized fields
-                        if (clipName == "Danh_1") clipDanh1 = clip;
-                        else if (clipName == "Danh_2") clipDanh2 = clip;
-                        else if (clipName == "Dnah_3") clipDanh3 = clip;
-                        else if (clipName == "To") clipTo = clip;
-
-                        Debug.Log($"[CardAudioSystem] Đã tải thành công âm thanh: {clipName}");
-                    }
-                }
-            }
         }
 
         /// <summary>

@@ -87,6 +87,8 @@ namespace LiarsCard.Cards3D
             cardObj.transform.SetParent(transform, true);
             var col = cardObj.GetComponent<Collider>();
             if (col != null) col.enabled = false;
+            // Update() của CardVisual3D kéo lá về tư thế trên tay (nghiêng 52°) => lật ngửa mặt số; nằm trên chồng thì đứng yên, úp
+            if (cardObj.TryGetComponent<CardVisual3D>(out var visual)) visual.enabled = false;
 
             pileCards.Add(cardObj);
             currentStackHeight += 0.002f; // Increment stack height per card

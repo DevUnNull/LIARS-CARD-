@@ -207,6 +207,8 @@ public class CardBattleUI : MonoBehaviour
             }
         }
 
+        UpdateSpectator();
+
         // Xử lý Input bàn phím & chuột
         HandleGameplayInput();
 
@@ -333,6 +335,8 @@ public class CardBattleUI : MonoBehaviour
 
     public void OnPenaltyWaitingForTrigger(string penalizedId, string challengerId, bool challengeSucceeded)
     {
+        // Đã rời bàn (bị loại rồi đứng dậy) nhưng server vẫn tính là người của trận cũ => bỏ qua, không bị kéo vào trận đó
+        if (!IsInBattle) return;
         penalizedPlayerId = penalizedId;
         string myId = TableSessionManager.Instance != null ? TableSessionManager.Instance.MyPlayerId : "";
         isPenalizedPlayer = !string.IsNullOrEmpty(myId) && string.Equals(penalizedId, myId, StringComparison.OrdinalIgnoreCase);
@@ -370,6 +374,7 @@ public class CardBattleUI : MonoBehaviour
 
     public void OnTriggerResultReceived(string victimId, bool isBulletHit, bool survived, bool eliminated, string nextPhase, string winnerId, int shotNumber = 0)
     {
+        if (!IsInBattle) return;
         awaitingTriggerPull = false;
         showPenaltyModal = true;
         triggerHoldProgress = 1f;
@@ -471,6 +476,9 @@ public class CardBattleUI : MonoBehaviour
     public void StartBattle(string newMatchId)
     {
         matchId = newMatchId;
+        TableCinematic.Stop();
+        cinematicWinnerId = null;
+        meDead = false;
         winnerPlayerId = null;
         pendingWinnerId = null;
         showPenaltyModal = false;
@@ -512,8 +520,44 @@ public class CardBattleUI : MonoBehaviour
         UpdateUGUI();
     }
 
+    private bool meDead;
+
+    // Bị loại (trận 3+ người vẫn tiếp tục): xem bàn mình từ góc trái/phải; trận kết thúc thì nhường cho cảnh người thắng
+    private void UpdateSpectator()
+    {
+        bool want = IsInBattle && meDead && string.IsNullOrEmpty(winnerPlayerId) && string.IsNullOrEmpty(pendingWinnerId)
+                    && !showPenaltyModal && !awaitingTriggerPull;
+        if (want && !TableCinematic.IsSpectating && !TableCinematic.IsWinnerPlaying) TableCinematic.PlaySpectator();
+        // Có người thắng thì không dừng ở đây: PlayWinner sẽ blend thẳng từ góc đang xem sang người thắng
+        else if (!want && TableCinematic.IsSpectating && string.IsNullOrEmpty(winnerPlayerId)) TableCinematic.Stop();
+
+        if (!TableCinematic.IsSpectating) return;
+        var kb = Keyboard.current;
+        if (kb == null) return;
+        if (kb.aKey.wasPressedThisFrame || kb.leftArrowKey.wasPressedThisFrame) TableCinematic.SetSpectatorAngle(0);
+        if (kb.dKey.wasPressedThisFrame || kb.rightArrowKey.wasPressedThisFrame) TableCinematic.SetSpectatorAngle(1);
+    }
+
+    private const float WinnerModalDelay = 3f;
+    private string cinematicWinnerId;
+    private float winnerSince;
+
+    private void PlayWinnerCinematic()
+    {
+        string myId = TableSessionManager.Instance != null ? TableSessionManager.Instance.MyPlayerId : null;
+        bool isMe = (!string.IsNullOrEmpty(myId) && string.Equals(winnerPlayerId, myId, StringComparison.OrdinalIgnoreCase))
+                    || string.Equals(winnerPlayerId, "Bạn", StringComparison.OrdinalIgnoreCase);
+        Transform avatar = null;
+        if (isMe) avatar = PlayerController.Instance != null ? PlayerController.Instance.transform : null;
+        else if (RemotePlayerManager.Instance != null) RemotePlayerManager.Instance.TryGetRemote(winnerPlayerId, out avatar);
+        TableCinematic.PlayWinner(avatar, isMe);   // không tìm được avatar (vd. id tạm "Đối thủ") thì bỏ qua, chỉ hiện bảng
+    }
+
     public void StopBattle()
     {
+        TableCinematic.Stop();
+        cinematicWinnerId = null;
+        meDead = false;
         matchId = "";
         myCards.Clear();
         selectedCards.Clear();
@@ -600,6 +644,7 @@ public class CardBattleUI : MonoBehaviour
         string myId = TableSessionManager.Instance != null ? TableSessionManager.Instance.MyPlayerId : "";
         var myPublicState = res.players?.Find(p => string.Equals(p.playerId, myId, System.StringComparison.OrdinalIgnoreCase));
         bool isMeDead = myPublicState != null && !myPublicState.isAlive;
+        meDead = isMeDead;
         var lastOwner = hasLastPlay ? res.players?.Find(p => string.Equals(p.playerId, lastPlay.playerId, System.StringComparison.OrdinalIgnoreCase)) : null;
         lastPlayOwnerOutOfCards = lastOwner != null && lastOwner.isAlive && lastOwner.remainingCardCount == 0;
         RemoteHands.Instance.SyncCounts(res.players, myId);
@@ -853,7 +898,15 @@ public class CardBattleUI : MonoBehaviour
         if (gameOverModal != null)
         {
             bool hasWinner = inBattle && !string.IsNullOrEmpty(winnerPlayerId);
-            if (gameOverModal.activeSelf != hasWinner) gameOverModal.SetActive(hasWinner);
+            if (hasWinner && cinematicWinnerId != winnerPlayerId)
+            {
+                cinematicWinnerId = winnerPlayerId;
+                winnerSince = Time.time;
+                PlayWinnerCinematic();
+            }
+            // Cho mọi người xem cảnh người thắng ăn mừng một lúc rồi mới hiện bảng kết quả
+            bool showModal = hasWinner && (Time.time - winnerSince >= WinnerModalDelay || !TableCinematic.IsWinnerPlaying);
+            if (gameOverModal.activeSelf != showModal) gameOverModal.SetActive(showModal);
 
             if (hasWinner)
             {
@@ -964,7 +1017,13 @@ public class CardBattleUI : MonoBehaviour
                 {
                     int myShot = RemoteHands.Instance.GetMyShot();
                     string myShotInfo = myShot > 0 ? $"   |   Súng của bạn: <color=#FFE680><b>{myShot}/6</b></color>" : "";
-                    if (showPenaltyModal && RevolverGun.Instance != null)
+                    if (TableCinematic.IsSpectating)
+                    {
+                        string left = TableCinematic.SpectatorAngle == 0 ? "<color=#FFE680><b>GÓC TRÁI</b></color>" : "GÓC TRÁI";
+                        string right = TableCinematic.SpectatorAngle == 1 ? "<color=#FFE680><b>GÓC PHẢI</b></color>" : "GÓC PHẢI";
+                        SetTxt(hudHintText, $"<color=#E74C3C><b>BẠN ĐÃ BỊ LOẠI</b></color> – đang xem bàn   |   [A/←]: {left}   |   [D/→]: {right}");
+                    }
+                    else if (showPenaltyModal && RevolverGun.Instance != null)
                     {
                         // Thay panel bằng thông báo: người bị phạt thấy hướng dẫn, người khác thấy đang chờ
                         string victim = !string.IsNullOrEmpty(penalizedPlayerId) ? penalizedPlayerId : "Đối thủ";
