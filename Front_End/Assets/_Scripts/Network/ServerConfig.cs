@@ -9,12 +9,8 @@ using UnityEngine.Networking;
 /// </summary>
 public static class ServerConfig
 {
-    // Editor = test local: chạy Back_End từ IDE, profile http (API :5280, UDP :9050). Bản build = server online.
-#if UNITY_EDITOR
-    public const bool UseOnlineServer = false;
-#else
+    // true = server online (tunnel). Đổi false để test local: chạy Back_End từ IDE, profile http (API :5280, UDP :9050).
     public const bool UseOnlineServer = true;
-#endif
     // shortcut: raw.githubusercontent cache ~5 phút, sửa server.json xong đợi vài phút client mới thấy
     public const string ConfigUrl = "https://raw.githubusercontent.com/DevUnNull/LIARS-CARD-/main/server.json";
 
