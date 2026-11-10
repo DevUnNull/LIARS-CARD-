@@ -261,6 +261,10 @@ public class AuthApiClient : Singleton<AuthApiClient>
             // Giữ thông báo mặc định bên dưới.
         }
 
+        // Body không phải JSON (vd. trang lỗi HTML 502 của Cloudflare khi backend tắt).
+        if (body.TrimStart().StartsWith("<"))
+            return "Server đang tắt hoặc không truy cập được. Thử lại sau.";
+
         return "Yêu cầu thất bại: " + body;
     }
     public IEnumerator TestMe(
