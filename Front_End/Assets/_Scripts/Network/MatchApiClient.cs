@@ -1,301 +1,73 @@
 using System;
 using System.Collections;
-using System.Text;
+using LiarsCard.Server;
 using UnityEngine;
-using UnityEngine.Networking;
 
 namespace LiarsCard.Network
 {
-    public class BypassCertificateHandler : CertificateHandler
-    {
-        protected override bool ValidateCertificate(byte[] certificateData) => true;
-    }
-
+    /// <summary>
+    /// API trận đấu / bàn chơi. Trước đây gọi HTTP tới Back_End; giờ gửi request qua GameLink tới
+    /// GameServer trên Master Client. Giữ nguyên chữ ký hàm để UI không phải sửa (tham số token bỏ qua).
+    /// </summary>
     public class MatchApiClient : MonoBehaviour
     {
         public static MatchApiClient Instance { get; private set; }
 
-        [Header("Backend Settings")]
-        public string baseUrl = "http://localhost:5000"; // Hoặc https://localhost:7189
-
         private void Awake()
         {
             if (Instance == null) Instance = this;
-            if (AuthApiClient.Instance != null && !string.IsNullOrEmpty(AuthApiClient.Instance.baseUrl))
-            {
-                baseUrl = AuthApiClient.Instance.baseUrl;
-            }
-            else if (Instance != this)
-            {
-                Destroy(gameObject);
-            }
+            else if (Instance != this) Destroy(gameObject);
         }
 
-        public IEnumerator GetHand(string matchId, string token, Action<PlayerHandResponse> onSuccess, Action<string> onError)
+        private static IEnumerator Call<T>(string route, RouteArgs args, Action<T> onSuccess, Action<string> onError)
         {
-            string url = $"{baseUrl}/api/matches/{matchId}/me/hand";
-            using (UnityWebRequest req = UnityWebRequest.Get(url))
+            yield return GameLink.Request(route, args, (ok, body) =>
             {
-                SetupRequest(req, token);
-                yield return req.SendWebRequest();
-
-                if (req.result == UnityWebRequest.Result.Success)
-                {
-                    var res = JsonUtility.FromJson<PlayerHandResponse>(req.downloadHandler.text);
-                    onSuccess?.Invoke(res);
-                }
-                else
-                {
-                    onError?.Invoke(ExtractError(req));
-                }
-            }
+                if (!ok) { onError?.Invoke(body); return; }
+                T res;
+                try { res = JsonUtility.FromJson<T>(body); }
+                catch (Exception e) { onError?.Invoke("Phản hồi không hợp lệ: " + e.Message); return; }
+                onSuccess?.Invoke(res);
+            });
         }
 
-        public IEnumerator GetState(string matchId, string token, Action<PublicMatchStateResponse> onSuccess, Action<string> onError)
+        private static IEnumerator CallText(string route, RouteArgs args, Action<string> onSuccess, Action<string> onError)
         {
-            string url = $"{baseUrl}/api/matches/{matchId}/state";
-            using (UnityWebRequest req = UnityWebRequest.Get(url))
-            {
-                SetupRequest(req, token);
-                yield return req.SendWebRequest();
-
-                if (req.result == UnityWebRequest.Result.Success)
-                {
-                    var res = JsonUtility.FromJson<PublicMatchStateResponse>(req.downloadHandler.text);
-                    onSuccess?.Invoke(res);
-                }
-                else
-                {
-                    onError?.Invoke(ExtractError(req));
-                }
-            }
+            yield return GameLink.Request(route, args, (ok, body) => { if (ok) onSuccess?.Invoke(body); else onError?.Invoke(body); });
         }
 
-        public IEnumerator Ready(string matchId, string token, Action<PublicMatchStateResponse> onSuccess, Action<string> onError)
-        {
-            string url = $"{baseUrl}/api/matches/{matchId}/ready";
-            string bodyJson = "{\"isReady\": true}";
-            using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
-            {
-                byte[] bodyRaw = Encoding.UTF8.GetBytes(bodyJson);
-                req.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                SetupRequest(req, token);
+        public IEnumerator GetHand(string matchId, string token, Action<PlayerHandResponse> onSuccess, Action<string> onError) =>
+            Call("matches/hand", new RouteArgs { matchId = matchId }, onSuccess, onError);
 
-                yield return req.SendWebRequest();
+        public IEnumerator GetState(string matchId, string token, Action<PublicMatchStateResponse> onSuccess, Action<string> onError) =>
+            Call("matches/state", new RouteArgs { matchId = matchId }, onSuccess, onError);
 
-                if (req.result == UnityWebRequest.Result.Success)
-                {
-                    var res = JsonUtility.FromJson<PublicMatchStateResponse>(req.downloadHandler.text);
-                    onSuccess?.Invoke(res);
-                }
-                else
-                {
-                    onError?.Invoke(ExtractError(req));
-                }
-            }
-        }
+        public IEnumerator Ready(string matchId, string token, Action<PublicMatchStateResponse> onSuccess, Action<string> onError) =>
+            Call("matches/ready", new RouteArgs { matchId = matchId }, onSuccess, onError);
 
-        public IEnumerator PlayCards(string matchId, string token, PlayCardsRequest request, Action<PlayCardsResponse> onSuccess, Action<string> onError)
-        {
-            string url = $"{baseUrl}/api/matches/{matchId}/deck/play-cards";
-            string json = JsonUtility.ToJson(request);
-
-            using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
-            {
-                byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
-                req.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                SetupRequest(req, token);
-
-                yield return req.SendWebRequest();
-
-                if (req.result == UnityWebRequest.Result.Success)
-                {
-                    var res = JsonUtility.FromJson<PlayCardsResponse>(req.downloadHandler.text);
-                    onSuccess?.Invoke(res);
-                }
-                else
-                {
-                    onError?.Invoke(ExtractError(req));
-                }
-            }
-        }
+        public IEnumerator PlayCards(string matchId, string token, PlayCardsRequest request, Action<PlayCardsResponse> onSuccess, Action<string> onError) =>
+            Call("deck/play", new RouteArgs { matchId = matchId, expectedVersion = request.expectedVersion, cardInstanceIds = request.cardInstanceIds }, onSuccess, onError);
 
         // action: "challenge" (tố) hoặc "trust" (tin lượt đánh cuối của người vừa hết bài)
-        public IEnumerator Challenge(string matchId, string token, ChallengeRequest request, Action<ChallengeResponse> onSuccess, Action<string> onError, string action = "challenge")
-        {
-            string url = $"{baseUrl}/api/matches/{matchId}/deck/{action}";
-            string json = JsonUtility.ToJson(request);
+        public IEnumerator Challenge(string matchId, string token, ChallengeRequest request, Action<ChallengeResponse> onSuccess, Action<string> onError, string action = "challenge") =>
+            Call("deck/" + action, new RouteArgs { matchId = matchId, expectedVersion = request.expectedVersion, targetPlayId = request.targetPlayId }, onSuccess, onError);
 
-            using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
-            {
-                byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
-                req.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                SetupRequest(req, token);
+        public IEnumerator PullTrigger(string matchId, string token, PullTriggerRequest request, Action<PullTriggerResponse> onSuccess, Action<string> onError) =>
+            Call("deck/pull", new RouteArgs { matchId = matchId }, onSuccess, onError);
 
-                yield return req.SendWebRequest();
+        public IEnumerator GetTable(int tableId, string token, Action<TableResponseDto> onSuccess, Action<string> onError) =>
+            Call("tables/get", new RouteArgs { tableId = tableId }, onSuccess, onError);
 
-                if (req.result == UnityWebRequest.Result.Success)
-                {
-                    var res = JsonUtility.FromJson<ChallengeResponse>(req.downloadHandler.text);
-                    onSuccess?.Invoke(res);
-                }
-                else
-                {
-                    onError?.Invoke(ExtractError(req));
-                }
-            }
-        }
+        public IEnumerator SitDown(int tableId, int seatIndex, string token, Action<string> onSuccess, Action<string> onError) =>
+            CallText("tables/sit", new RouteArgs { tableId = tableId, seatIndex = seatIndex }, onSuccess, onError);
 
-        public IEnumerator PullTrigger(string matchId, string token, PullTriggerRequest request, Action<PullTriggerResponse> onSuccess, Action<string> onError)
-        {
-            string url = $"{baseUrl}/api/matches/{matchId}/deck/pull-trigger";
-            string json = JsonUtility.ToJson(request);
+        public IEnumerator LeaveSeat(Action<string> onSuccess, Action<string> onError) =>
+            CallText("tables/leave", null, onSuccess, onError);
 
-            using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
-            {
-                byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
-                req.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                SetupRequest(req, token);
+        public IEnumerator SetTableReady(bool ready, string token, Action<string> onSuccess, Action<string> onError) =>
+            CallText("tables/ready", new RouteArgs { ready = ready }, onSuccess, onError);
 
-                yield return req.SendWebRequest();
-
-                if (req.result == UnityWebRequest.Result.Success)
-                {
-                    var res = JsonUtility.FromJson<PullTriggerResponse>(req.downloadHandler.text);
-                    onSuccess?.Invoke(res);
-                }
-                else
-                {
-                    onError?.Invoke(ExtractError(req));
-                }
-            }
-        }
-
-        public IEnumerator GetTable(int tableId, string token, Action<TableResponseDto> onSuccess, Action<string> onError)
-        {
-            string url = $"{baseUrl}/api/tables/{tableId}";
-            using (UnityWebRequest req = UnityWebRequest.Get(url))
-            {
-                SetupRequest(req, token);
-                yield return req.SendWebRequest();
-
-                if (req.result == UnityWebRequest.Result.Success)
-                {
-                    var res = JsonUtility.FromJson<TableResponseDto>(req.downloadHandler.text);
-                    onSuccess?.Invoke(res);
-                }
-                else
-                {
-                    onError?.Invoke(ExtractError(req));
-                }
-            }
-        }
-
-        public IEnumerator SitDown(int tableId, int seatIndex, string token, Action<string> onSuccess, Action<string> onError)
-        {
-            string url = $"{baseUrl}/api/tables/{tableId}/sit";
-            string bodyJson = $"{{\"seatIndex\":{seatIndex}}}";
-            using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
-            {
-                byte[] bodyRaw = Encoding.UTF8.GetBytes(bodyJson);
-                req.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                SetupRequest(req, token);
-
-                yield return req.SendWebRequest();
-
-                if (req.result == UnityWebRequest.Result.Success)
-                {
-                    onSuccess?.Invoke(req.downloadHandler.text);
-                }
-                else
-                {
-                    onError?.Invoke(ExtractError(req));
-                }
-            }
-        }
-
-        public IEnumerator SetTableReady(bool ready, string token, Action<string> onSuccess, Action<string> onError)
-        {
-            string url = $"{baseUrl}/api/tables/ready";
-            string bodyJson = $"{{\"ready\":{(ready ? "true" : "false")}}}";
-            using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
-            {
-                byte[] bodyRaw = Encoding.UTF8.GetBytes(bodyJson);
-                req.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                SetupRequest(req, token);
-
-                yield return req.SendWebRequest();
-
-                if (req.result == UnityWebRequest.Result.Success)
-                {
-                    onSuccess?.Invoke(req.downloadHandler.text);
-                }
-                else
-                {
-                    onError?.Invoke(ExtractError(req));
-                }
-            }
-        }
-
-        public IEnumerator StartTableMatch(int tableId, string token, Action<StartMatchResponseDto> onSuccess, Action<string> onError)
-        {
-            string url = $"{baseUrl}/api/tables/{tableId}/start-match";
-            using (UnityWebRequest req = new UnityWebRequest(url, "POST"))
-            {
-                req.downloadHandler = new DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                SetupRequest(req, token);
-
-                yield return req.SendWebRequest();
-
-                if (req.result == UnityWebRequest.Result.Success)
-                {
-                    var res = JsonUtility.FromJson<StartMatchResponseDto>(req.downloadHandler.text);
-                    onSuccess?.Invoke(res);
-                }
-                else
-                {
-                    onError?.Invoke(ExtractError(req));
-                }
-            }
-        }
-
-        private void SetupRequest(UnityWebRequest req, string token)
-        {
-            req.certificateHandler = new BypassCertificateHandler();
-            if (!string.IsNullOrEmpty(token))
-            {
-                req.SetRequestHeader("Authorization", "Bearer " + token);
-            }
-        }
-
-        private string ExtractError(UnityWebRequest req)
-        {
-            try
-            {
-                if (!string.IsNullOrEmpty(req.downloadHandler?.text))
-                {
-                    var err = JsonUtility.FromJson<GameErrorResponse>(req.downloadHandler.text);
-                    if (err != null && !string.IsNullOrEmpty(err.code))
-                    {
-                        return $"[{err.code}] {err.message}";
-                    }
-                }
-            }
-            catch { }
-            return req.error ?? "Lỗi mạng không xác định";
-        }
+        public IEnumerator StartTableMatch(int tableId, string token, Action<StartMatchResponseDto> onSuccess, Action<string> onError) =>
+            Call("tables/start", new RouteArgs { tableId = tableId }, onSuccess, onError);
     }
 }

@@ -1,9 +1,6 @@
 using System;
 using System.Collections;
-using System.Text;
 using UnityEngine;
-using UnityEngine.Networking;
-using static AuthApiClient;
 
 public class ChairItem : Item
 {
@@ -62,57 +59,18 @@ public class ChairItem : Item
 
     private IEnumerator SendSitDownRequest()
     {
-        var auth = AuthApiClient.Instance;
-
-        if (auth == null || string.IsNullOrWhiteSpace(auth.AccessToken))
-        {
-            Debug.LogWarning("Not login yet");
-            yield break;
-        }
-
         isRequesting = true;
-
         try
         {
-            string url = $"{AuthApiClient.Instance.baseUrl.TrimEnd('/')}/api/tables/{tableID}/sit";
+            bool ok = false;
+            yield return LiarsCard.Network.MatchApiClient.Instance.SitDown(tableID, sitIndex, null,
+                _ => ok = true,
+                err => Debug.LogWarning($"Không ngồi được: {err}"));
+            if (!ok) yield break;
 
-            string json = JsonUtility.ToJson(new SitDownData
-            {
-                seatIndex = sitIndex
-            });
-
-            using (var request = new UnityWebRequest(url, "POST"))
-            {
-                request.uploadHandler = new UploadHandlerRaw(
-                    Encoding.UTF8.GetBytes(json));
-
-                request.downloadHandler = new DownloadHandlerBuffer();
-                request.timeout = 15;
-
-                request.SetRequestHeader("Content-Type", "application/json");
-                request.SetRequestHeader(
-                    "Authorization", $"Bearer {auth.AccessToken}");
-
-                yield return request.SendWebRequest();
-
-                if (request.result != UnityWebRequest.Result.Success)
-                {
-                    Debug.LogWarning(
-                        $"Cant sit: HTTP {request.responseCode}\n" +
-                        $"{request.error}\n{request.downloadHandler.text}");
-
-                    yield break;
-                }
-
-                Debug.Log($"Table : {tableID}, Chair : {sitIndex}.");
-
-                SeatPlayer(PlayerController.Instance);
-
-                if (TableSessionManager.Instance != null)
-                {
-                    TableSessionManager.Instance.OnSitDownSuccess(tableID, sitIndex);
-                }
-            }
+            Debug.Log($"Table : {tableID}, Chair : {sitIndex}.");
+            SeatPlayer(PlayerController.Instance);
+            if (TableSessionManager.Instance != null) TableSessionManager.Instance.OnSitDownSuccess(tableID, sitIndex);
         }
         finally
         {

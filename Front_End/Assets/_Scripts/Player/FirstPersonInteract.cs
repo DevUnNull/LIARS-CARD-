@@ -1,7 +1,6 @@
 ﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.Networking;
 
 public class FirstPersonInteract : MonoBehaviour
 {
@@ -54,49 +53,16 @@ public class FirstPersonInteract : MonoBehaviour
 
     private IEnumerator SendLeaveSeatRequest()
     {
-        var auth = AuthApiClient.Instance;
-
-        if (auth == null || string.IsNullOrWhiteSpace(auth.AccessToken))
-        {
-            Debug.LogWarning("Not login yet.");
-            // Force release locally even if server returns error
-        }
-
         isLeavingSeat = true;
-
         try
         {
-            string url = $"{AuthApiClient.Instance.baseUrl.TrimEnd('/')}/api/tables/leaveSeat";
+            // Lỗi từ server (vd. chưa ngồi) vẫn đứng dậy tại chỗ cho khỏi kẹt
+            yield return LiarsCard.Network.MatchApiClient.Instance.LeaveSeat(null, err => Debug.LogWarning($"Rời ghế lỗi: {err}"));
 
-            using (var request = new UnityWebRequest(url, "POST"))
-            {
-                request.downloadHandler = new DownloadHandlerBuffer();
-                request.timeout = 15;
-
-                request.SetRequestHeader(
-                    "Authorization",
-                    $"Bearer {auth.AccessToken}");
-
-                yield return request.SendWebRequest();
-
-                if (request.result != UnityWebRequest.Result.Success)
-                {
-                    Debug.LogWarning(
-                        $"Cant not leave: HTTP {request.responseCode}\n" +
-                        $"{request.error}\n{request.downloadHandler.text}");
-
-                    // Force release locally even if server returns error
-                }
-
-                Debug.Log("Leave sit.");
-                PlayerController.Instance.firstPersonMovement.enabled = true;
-                PlayerController.Instance.firstPersonLook.RestoreFov();
-
-                if (TableSessionManager.Instance != null)
-                {
-                    TableSessionManager.Instance.OnLeaveSeatSuccess();
-                }
-            }
+            Debug.Log("Leave sit.");
+            PlayerController.Instance.firstPersonMovement.enabled = true;
+            PlayerController.Instance.firstPersonLook.RestoreFov();
+            if (TableSessionManager.Instance != null) TableSessionManager.Instance.OnLeaveSeatSuccess();
         }
         finally
         {

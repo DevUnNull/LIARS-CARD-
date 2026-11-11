@@ -1,306 +1,36 @@
-﻿
-using System;
-using System.Collections;
-using System.Text;
+﻿using System;
 using UnityEngine;
-using UnityEngine.Networking;
 
-[DefaultExecutionOrder(-200)] // Awake trước MatchApiClient để MatchApiClient lấy đúng baseUrl
+/// <summary>
+/// Danh tính người chơi trên bản Photon: chỉ có tên hiển thị, không tài khoản / mật khẩu.
+/// Mỗi lần mở game sinh một playerId mới (2 cửa sổ game trên cùng máy vẫn là 2 người khác nhau).
+/// </summary>
+[DefaultExecutionOrder(-200)]
 public class AuthApiClient : Singleton<AuthApiClient>
 {
+    public const int MaxNameLength = 20;
+
+    public string CurrentUserId { get; private set; }
+    public string DisplayName { get; private set; }
+
+    // shortcut: không còn JWT, giữ tên AccessToken = playerId cho các chỗ đang kiểm tra "đã vào game chưa"
+    public string AccessToken => CurrentUserId;
+
     protected override void Awake()
     {
         base.Awake();
-        if (ServerConfig.IsSet) baseUrl = ServerConfig.ApiBaseUrl;
-
-        if (Instance != this)
-            return;
-
-        DontDestroyOnLoad(gameObject);
-        StartCoroutine(LoadServerConfig());
+        if (Instance == this) DontDestroyOnLoad(gameObject);
     }
 
-    private IEnumerator LoadServerConfig()
+    /// <summary>Đặt tên hiển thị. Trả lỗi (tiếng Việt) nếu tên không hợp lệ, null nếu ổn.</summary>
+    public string SignIn(string displayName)
     {
-        yield return ServerConfig.Fetch();
-        if (!ServerConfig.IsSet) yield break;
-        baseUrl = ServerConfig.ApiBaseUrl;
-        if (LiarsCard.Network.MatchApiClient.Instance != null) LiarsCard.Network.MatchApiClient.Instance.baseUrl = baseUrl;
-        if (NetworkManager.Instance != null) NetworkManager.Instance.ApplyServerConfig();
-    }
+        displayName = displayName?.Trim() ?? "";
+        if (displayName.Length == 0) return "Nhập tên của bạn.";
+        if (displayName.Length > MaxNameLength) return $"Tên tối đa {MaxNameLength} ký tự.";
 
-    [SerializeField]
-    public string baseUrl = "http://localhost:5000";
-
-    public string AccessToken { get; private set; }
-    public string RefreshToken { get; private set; }
-    public string CurrentUserId { get; private set; }
-
-
-    public void TestMeButton()
-    {
-        if (string.IsNullOrEmpty(AccessToken))
-        {
-            Debug.LogError("Chưa có Access Token. Hãy Login trước.");
-            return;
-        }
-
-        StartCoroutine(TestMeRoutine());
-    }
-
-    private IEnumerator TestMeRoutine()
-    {
-        using (var request = UnityWebRequest.Get(
-            baseUrl + "/api/auth/me"))
-        {
-            request.SetRequestHeader(
-                "Authorization",
-                "Bearer " + AccessToken);
-
-            yield return request.SendWebRequest();
-
-            Debug.Log("GET /api/auth/me");
-            Debug.Log("HTTP Status: " + request.responseCode);
-            Debug.Log("Response: " + request.downloadHandler.text);
-
-            if (request.responseCode == 401)
-            {
-                Debug.LogError("Token bị từ chối.");
-            }
-        }
-    }
-
-
-    [Serializable]
-    public class AuthResponse
-    {
-        public string message;
-        public UserData user;
-        public string accessToken;
-        public string refreshToken;
-    }
-
-    [Serializable]
-    public class UserData
-    {
-        public string id;
-        public string email;
-        public string displayName;
-    }
-
-    [Serializable]
-    public class ApiError
-    {
-        public string message;
-        public string title;
-    }
-
-    [Serializable]
-    public class SitDownData
-    {
-        public int seatIndex;
-    }
-
-    public IEnumerator Register(
-        string email,
-        string displayName,
-        string password,
-        Action<bool, string> callback)
-    {
-        string json = JsonUtility.ToJson(new RegisterData
-        {
-            email = email.Trim(),
-            displayName = displayName.Trim(),
-            password = password
-        });
-
-        yield return SendRequest(
-            "/api/auth/register", json, false, (success, body) =>
-            {
-                callback?.Invoke(
-                    success,
-                    success ? "Đăng ký thành công!" : GetError(body));
-            });
-    }
-
-    public IEnumerator Login(
-        string email,
-        string password,
-        Action<bool, string> callback)
-    {
-        string json = JsonUtility.ToJson(new LoginData
-        {
-            email = email.Trim(),
-            password = password
-        });
-
-        yield return SendRequest(
-            "/api/auth/login", json, false, (success, body) =>
-            {
-                if (!success)
-                {
-                    callback?.Invoke(false, GetError(body));
-                    return;
-                }
-
-                AuthResponse response;
-
-                try
-                {
-                    response = JsonUtility.FromJson<AuthResponse>(body);
-                }
-                catch (Exception)
-                {
-                    callback?.Invoke(false, "Phản hồi server không hợp lệ.");
-                    return;
-                }
-
-                if (response == null ||
-                    string.IsNullOrEmpty(response.accessToken) ||
-                    string.IsNullOrEmpty(response.refreshToken))
-                {
-                    callback?.Invoke(false, "Server không trả đủ token.");
-                    return;
-                }
-
-                AccessToken = response.accessToken;
-                RefreshToken = response.refreshToken;
-                CurrentUserId = response.user != null ? response.user.id : ExtractUserIdFromToken(response.accessToken);
-
-                Debug.Log("Login thành công. User ID: " +
-                    (response.user != null ? response.user.id : "Không có"));
-
-                callback?.Invoke(true, "Đăng nhập thành công!");
-            });
-    }
-
-        public static string ExtractUserIdFromToken(string token)
-    {
-        if (string.IsNullOrEmpty(token)) return null;
-        try
-        {
-            var parts = token.Split('.');
-            if (parts.Length < 2) return null;
-            string payload = parts[1];
-            payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
-            byte[] bytes = Convert.FromBase64String(payload);
-            string json = Encoding.UTF8.GetString(bytes);
-            // Simple extraction for sub or nameid
-            int subIdx = json.IndexOf("\"sub\":\"", StringComparison.OrdinalIgnoreCase);
-            if (subIdx >= 0)
-            {
-                int start = subIdx + 7;
-                int end = json.IndexOf('"', start);
-                if (end > start) return json.Substring(start, end - start);
-            }
-            int nameidIdx = json.IndexOf("\"nameid\":\"", StringComparison.OrdinalIgnoreCase);
-            if (nameidIdx >= 0)
-            {
-                int start = nameidIdx + 10;
-                int end = json.IndexOf('"', start);
-                if (end > start) return json.Substring(start, end - start);
-            }
-        }
-        catch { }
+        DisplayName = displayName;
+        if (string.IsNullOrEmpty(CurrentUserId)) CurrentUserId = Guid.NewGuid().ToString("N");
         return null;
-    }
-
-    private IEnumerator SendRequest(
-        string path,
-        string json,
-        bool authenticated,
-        Action<bool, string> callback)
-    {
-        yield return new WaitUntil(() => ServerConfig.Ready); // login/register đợi có địa chỉ server
-
-        using (UnityWebRequest request = new UnityWebRequest(
-            baseUrl + path, "POST"))
-        {
-            byte[] body = Encoding.UTF8.GetBytes(json);
-
-            request.uploadHandler = new UploadHandlerRaw(body);
-            request.downloadHandler = new DownloadHandlerBuffer();
-            request.SetRequestHeader("Content-Type", "application/json");
-
-            if (authenticated && !string.IsNullOrEmpty(AccessToken))
-            {
-                request.SetRequestHeader(
-                    "Authorization", "Bearer " + AccessToken);
-            }
-
-            yield return request.SendWebRequest();
-
-            bool success =
-                request.result == UnityWebRequest.Result.Success;
-
-            callback?.Invoke(
-                success, request.downloadHandler?.text ?? "");
-        }
-    }
-
-    private string GetError(string body)
-    {
-        if (string.IsNullOrWhiteSpace(body))
-            return "Không nhận được phản hồi từ server.";
-
-        try
-        {
-            ApiError error = JsonUtility.FromJson<ApiError>(body);
-
-            if (error != null)
-            {
-                if (!string.IsNullOrEmpty(error.message))
-                    return error.message;
-
-                if (!string.IsNullOrEmpty(error.title))
-                    return error.title;
-            }
-        }
-        catch (Exception)
-        {
-            // Giữ thông báo mặc định bên dưới.
-        }
-
-        // Body không phải JSON (vd. trang lỗi HTML 502 của Cloudflare khi backend tắt).
-        if (body.TrimStart().StartsWith("<"))
-            return "Server đang tắt hoặc không truy cập được. Thử lại sau.";
-
-        return "Yêu cầu thất bại: " + body;
-    }
-    public IEnumerator TestMe(
-    System.Action<bool, string> callback)
-    {
-        using (var request = UnityWebRequest.Get(
-            baseUrl + "/api/auth/me"))
-        {
-            request.SetRequestHeader(
-                "Authorization",
-                "Bearer " + AccessToken);
-
-            yield return request.SendWebRequest();
-
-            bool success =
-                request.result == UnityWebRequest.Result.Success;
-
-            callback?.Invoke(
-                success,
-                request.downloadHandler.text);
-        }
-    }
-
-
-    [Serializable]
-    private class RegisterData
-    {
-        public string email;
-        public string displayName;
-        public string password;
-    }
-
-    [Serializable]
-    private class LoginData
-    {
-        public string email;
-        public string password;
     }
 }

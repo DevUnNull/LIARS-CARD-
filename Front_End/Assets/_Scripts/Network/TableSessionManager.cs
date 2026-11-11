@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using UnityEngine;
 using LiarsCard.Network;
@@ -19,16 +19,7 @@ public class TableSessionManager : Singleton<TableSessionManager>
 
     private Coroutine pollCoroutine;
 
-    public string MyPlayerId
-    {
-        get
-        {
-            var auth = AuthApiClient.Instance;
-            if (auth == null) return null;
-            if (!string.IsNullOrEmpty(auth.CurrentUserId)) return auth.CurrentUserId;
-            return AuthApiClient.ExtractUserIdFromToken(auth.AccessToken);
-        }
-    }
+    public string MyPlayerId => AuthApiClient.Instance != null ? AuthApiClient.Instance.CurrentUserId : null;
 
     public bool IsHost
     {
@@ -204,70 +195,5 @@ public class TableSessionManager : Singleton<TableSessionManager>
             },
             onError: err => callback?.Invoke(false, err)
         ));
-    }
-    public void SimulatePlayer2JoinAndReady(Action<bool, string> callback)
-    {
-        StartCoroutine(SimulatePlayer2Routine(callback));
-    }
-
-    private IEnumerator SimulatePlayer2Routine(Action<bool, string> callback)
-    {
-        var auth = AuthApiClient.Instance;
-        string baseUrl = auth != null ? auth.baseUrl : "http://localhost:5280";
-        string botEmail = "player2_test@gmail.com";
-        string botPass = "Password123@";
-        string botToken = null;
-
-        // 1. Thu dang nhap bot
-        string loginJson = $"{{\"email\":\"{botEmail}\",\"password\":\"{botPass}\"}}";
-        using (var req = new UnityEngine.Networking.UnityWebRequest($"{baseUrl}/api/auth/login", "POST"))
-        {
-            req.uploadHandler = new UnityEngine.Networking.UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(loginJson));
-            req.downloadHandler = new UnityEngine.Networking.DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-            req.certificateHandler = new BypassCertificateHandler();
-            yield return req.SendWebRequest();
-
-            if (req.result == UnityEngine.Networking.UnityWebRequest.Result.Success)
-            {
-                var res = JsonUtility.FromJson<AuthApiClient.AuthResponse>(req.downloadHandler.text);
-                botToken = res?.accessToken;
-            }
-        }
-
-        // 2. Neu chua co tai khoan thi dang ky
-        if (string.IsNullOrEmpty(botToken))
-        {
-            string regJson = $"{{\"email\":\"{botEmail}\",\"displayName\":\"Player 2 (Test)\",\"password\":\"{botPass}\"}}";
-            using (var req = new UnityEngine.Networking.UnityWebRequest($"{baseUrl}/api/auth/register", "POST"))
-            {
-                req.uploadHandler = new UnityEngine.Networking.UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(regJson));
-                req.downloadHandler = new UnityEngine.Networking.DownloadHandlerBuffer();
-                req.SetRequestHeader("Content-Type", "application/json");
-                req.certificateHandler = new BypassCertificateHandler();
-                yield return req.SendWebRequest();
-
-                if (req.result == UnityEngine.Networking.UnityWebRequest.Result.Success)
-                {
-                    var res = JsonUtility.FromJson<AuthApiClient.AuthResponse>(req.downloadHandler.text);
-                    botToken = res?.accessToken;
-                }
-            }
-        }
-
-        if (string.IsNullOrEmpty(botToken))
-        {
-            callback?.Invoke(false, "Không thể đăng nhập tài khoản Player 2.");
-            yield break;
-        }
-
-        // 3. Bot ngoi vao ghe 1
-        yield return MatchApiClient.Instance.SitDown(currentTableId, 1, botToken, null, null);
-
-        // 4. Bot ready
-        yield return MatchApiClient.Instance.SetTableReady(true, botToken, null, null);
-
-        RefreshTableNow();
-        callback?.Invoke(true, "Player 2 ảo đã ngồi vào Ghế 1 và Sẵn Sàng!");
     }
 }
