@@ -366,7 +366,7 @@ public class CardBattleUI : MonoBehaviour
         }
         else
         {
-            statusMessage = $"<color=yellow>Đang chờ [{penalizedId}] tự bóp cò súng Nga...</color>";
+            statusMessage = $"<color=yellow>Đang chờ [{PlayerNames.Of(penalizedId)}] tự bóp cò súng Nga...</color>";
         }
 
         UpdateUGUI();
@@ -381,7 +381,7 @@ public class CardBattleUI : MonoBehaviour
 
         string myId = TableSessionManager.Instance != null ? TableSessionManager.Instance.MyPlayerId : "";
         bool isMe = !string.IsNullOrEmpty(myId) && string.Equals(victimId, myId, StringComparison.OrdinalIgnoreCase);
-        string victimName = isMe ? "BẠN" : $"[{victimId}]";
+        string victimName = isMe ? "BẠN" : $"[{PlayerNames.Of(victimId)}]";
 
         // Súng 3D tự phát âm thanh + animation đoàng/tạch; chỉ phát tiếng ở đây khi không có súng 3D
         if (RevolverGun.Instance != null)
@@ -613,6 +613,7 @@ public class CardBattleUI : MonoBehaviour
         int oldRound = roundNumber;
         roundNumber = res.roundNumber;
         tableRank = res.tableRank;
+        if (res.players != null) foreach (var p in res.players) PlayerNames.Remember(p.playerId, p.displayName);
         currentTurnPlayerId = res.currentTurnPlayerId;
         stateVersion = res.stateVersion;
         bool hadLastPlay = lastPlay != null && !string.IsNullOrEmpty(lastPlay.playId);
@@ -920,7 +921,7 @@ public class CardBattleUI : MonoBehaviour
                 }
                 if (goWinnerText != null)
                 {
-                    SetTxt(goWinnerText, isMeWinner ? "Bạn là người sống sót duy nhất tại bàn chơi Liar's Card!" : $"Người chiến thắng ván chơi: <b>{winnerPlayerId}</b>");
+                    SetTxt(goWinnerText, isMeWinner ? "Bạn là người sống sót duy nhất tại bàn chơi Liar's Card!" : $"Người chiến thắng ván chơi: <b>{PlayerNames.Of(winnerPlayerId)}</b>");
                 }
 
                 if (battleHUD != null && battleHUD.activeSelf) battleHUD.SetActive(false);
@@ -980,7 +981,7 @@ public class CardBattleUI : MonoBehaviour
                     }
                     else
                     {
-                        string shortTurnId = currentTurnPlayerId.Length > 12 ? currentTurnPlayerId.Substring(0, 12) + "..." : currentTurnPlayerId;
+                        string shortTurnId = PlayerNames.Of(currentTurnPlayerId);
                         SetTxt(currentTurnText, $"Đang đợi: <b>{shortTurnId}</b>");
                     }
                 }
@@ -989,7 +990,7 @@ public class CardBattleUI : MonoBehaviour
                 {
                     if (lastPlay != null && !string.IsNullOrEmpty(lastPlay.playId))
                     {
-                        string pId = lastPlay.playerId.Length > 12 ? lastPlay.playerId.Substring(0, 12) + "..." : lastPlay.playerId;
+                        string pId = PlayerNames.Of(lastPlay.playerId);
                         SetTxt(lastPlayText, $"Lượt trước: <color=#00FFFF><b>{pId}</b></color> vừa đánh úp <b>{lastPlay.cardCount}</b> lá bài! (Bấm [X] để Bắt Láo)");
                     }
                     else
@@ -1107,7 +1108,7 @@ public class CardBattleUI : MonoBehaviour
         }
         else
         {
-            string shortTurnId = currentTurnPlayerId.Length > 12 ? currentTurnPlayerId.Substring(0, 12) + "..." : currentTurnPlayerId;
+            string shortTurnId = PlayerNames.Of(currentTurnPlayerId);
             GUILayout.Label($"Đang đợi: <b>{shortTurnId}</b>", GetCenterHeaderStyle());
         }
         GUILayout.EndVertical();
@@ -1128,7 +1129,7 @@ public class CardBattleUI : MonoBehaviour
 
         if (lastPlay != null && !string.IsNullOrEmpty(lastPlay.playId))
         {
-            string pId = lastPlay.playerId.Length > 12 ? lastPlay.playerId.Substring(0, 12) + "..." : lastPlay.playerId;
+            string pId = PlayerNames.Of(lastPlay.playerId);
             GUILayout.Label($"Lượt trước: <color=cyan><b>{pId}</b></color> vừa đánh úp <b>{lastPlay.cardCount}</b> lá bài! (Bấm <b>[X]</b> để Bắt Láo)", GetCenterSubHeaderStyle());
         }
         else
@@ -1274,7 +1275,7 @@ public class CardBattleUI : MonoBehaviour
             GUI.color = Color.red;
             GUILayout.Label("<size=22><b>💀 BẠN ĐÃ THUA CUỘC! 💀</b></size>", GetCenterHeaderStyle());
             GUI.color = Color.white;
-            GUILayout.Label($"Người chiến thắng ván chơi: <b>{winnerPlayerId}</b>", GetCenterHeaderStyle());
+            GUILayout.Label($"Người chiến thắng ván chơi: <b>{PlayerNames.Of(winnerPlayerId)}</b>", GetCenterHeaderStyle());
         }
 
         GUILayout.Space(25);

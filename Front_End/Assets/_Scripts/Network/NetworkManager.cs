@@ -191,6 +191,13 @@ public class NetworkManager : Singleton<NetworkManager>
                             break;
                         }
 
+                    case 17: // Tên hiển thị của người chơi khác: playerId, displayName
+                        {
+                            string namePlayerId = reader.GetString(128);
+                            PlayerNames.Remember(namePlayerId, reader.GetString(64));
+                            break;
+                        }
+
                     case 16: // Jukebox: playing, index bài, elapsedMs, volume (0..10)
                         {
                             bool playing = reader.GetBool();

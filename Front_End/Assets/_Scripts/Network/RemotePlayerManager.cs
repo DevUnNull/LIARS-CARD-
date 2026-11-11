@@ -41,6 +41,7 @@ public class RemotePlayerManager : Singleton<RemotePlayerManager>
 
             remote = playerObject.transform;
             remotePlayers[playerId] = remote;
+            playerObject.AddComponent<NameTag>().Init(playerId);
 
             if (skins.TryGetValue(playerId, out byte skinId) && playerObject.TryGetComponent<PlayerSkin>(out var skin))
                 skin.SetSkin(skinId);

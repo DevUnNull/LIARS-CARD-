@@ -139,6 +139,7 @@ public class PlanarMirror : MonoBehaviour
 
         // Không render chính khung/kính gương (kính đang là texture đích)
         foreach (var r in ownRenderers) if (r != null) r.enabled = false;
+        NameTag.BeginMirror(cam);
 
         // Hiện thân người chơi local trong gương
         var player = PlayerController.Instance;
@@ -156,6 +157,7 @@ public class PlanarMirror : MonoBehaviour
         if (cam != mirrorCam) return;
 
         foreach (var r in ownRenderers) if (r != null) r.enabled = true;
+        NameTag.EndMirror();
         foreach (var r in shownBody) if (r != null) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
         shownBody.Clear();
     }

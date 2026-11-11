@@ -100,6 +100,17 @@ namespace Back_End.Services
                 foreach (var entry in skins)
                     peer.Send(SkinPacket(entry.Key, entry.Value), DeliveryMethod.ReliableOrdered);
 
+                // Tên hiển thị: người mới nhận tên mọi người, mọi người nhận tên người mới
+                var myName = NamePacket(playerId);
+                peer.Send(myName, DeliveryMethod.ReliableOrdered);   // tên chính mình (hiện trong gương)
+                foreach (var entry in playerConnectionService.GetAll())
+                {
+                    if (entry.Key == playerId || entry.Value.ConnectionState != ConnectionState.Connected)
+                        continue;
+                    peer.Send(NamePacket(entry.Key), DeliveryMethod.ReliableOrdered);
+                    entry.Value.Send(myName, DeliveryMethod.ReliableOrdered);
+                }
+
                 // ...và bài Jukebox đang phát để nghe chung từ đúng đoạn đó
                 peer.Send(jukebox.StatePacket(), DeliveryMethod.ReliableOrdered);
 
@@ -352,6 +363,16 @@ namespace Back_End.Services
             {
                 jukebox.Handle(cmd);   // lệnh lạ bị Handle bỏ qua
             }
+        }
+
+        /// <summary>Server -> Client, Packet Type 17: string playerId, string displayName.</summary>
+        private static NetDataWriter NamePacket(string playerId)
+        {
+            var writer = new NetDataWriter();
+            writer.Put((byte)17);
+            writer.Put(playerId);
+            writer.Put(PlayerNames.Get(playerId) ?? playerId, 64);
+            return writer;
         }
 
         private static NetDataWriter SkinPacket(string playerId, byte skinId)

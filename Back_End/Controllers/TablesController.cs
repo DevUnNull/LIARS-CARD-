@@ -85,6 +85,7 @@ namespace Back_End.Controllers
                 });
             }
 
+            PlayerNames.Set(playerId, User.FindFirstValue("displayName"));
             string? error = _tableService.SitDown(tableId, request.SeatIndex.Value, playerId);
 
             if (error == "TABLE_NOT_FOUND")

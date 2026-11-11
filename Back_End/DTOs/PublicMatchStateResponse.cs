@@ -5,6 +5,7 @@ namespace Back_End.DTOs
     public class PublicPlayerStateDto
     {
         public string PlayerId { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
         public bool IsAlive { get; set; }
         public int RemainingCardCount { get; set; }
         public bool IsConnected { get; set; }

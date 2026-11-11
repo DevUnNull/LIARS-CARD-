@@ -21,6 +21,7 @@ namespace LiarsCard.Network
     public class PublicPlayerStateDto
     {
         public string playerId;
+        public string displayName;
         public bool isAlive;
         public int remainingCardCount;
         public int shotCount;   // phát bắn kế tiếp X/6
@@ -121,6 +122,7 @@ namespace LiarsCard.Network
     {
         public int seatIndex;
         public string playerId;
+        public string displayName;
         public bool isReady;
     }
 

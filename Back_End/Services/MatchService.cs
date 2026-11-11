@@ -48,7 +48,7 @@ namespace Back_End.Services
                 match.Players.Add(new MatchPlayer
                 {
                     PlayerId = pid,
-                    DisplayName = pid,
+                    DisplayName = PlayerNames.Get(pid) ?? pid,
                     SeatIndex = seat++,
                     IsAlive = true,
                     IsReady = false,

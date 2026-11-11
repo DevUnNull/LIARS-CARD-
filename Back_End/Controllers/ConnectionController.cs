@@ -30,6 +30,7 @@ namespace Back_End.Controllers
                 });
             }
 
+            PlayerNames.Set(playerId, User.FindFirstValue("displayName"));
             string ticket = ticketService.Create(playerId);
 
             Response.Headers["Cache-Control"] = "no-store";

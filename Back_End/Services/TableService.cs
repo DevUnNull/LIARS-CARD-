@@ -65,6 +65,7 @@ namespace Back_End.Services
                         {
                             SeatIndex = tables[i].Seats[j].SeatIndex,
                             PlayerId = tables[i].Seats[j].PlayerId,
+                            DisplayName = PlayerNames.Get(tables[i].Seats[j].PlayerId),
                             IsReady = tables[i].Seats[j].IsReady,
                         });
                     }
@@ -103,6 +104,7 @@ namespace Back_End.Services
                     {
                         SeatIndex = table.Seats[i].SeatIndex,
                         PlayerId = table.Seats[i].PlayerId,
+                        DisplayName = PlayerNames.Get(table.Seats[i].PlayerId),
                         IsReady = table.Seats[i].IsReady
                     });
                 }

@@ -107,7 +107,7 @@ public class TableLobbyUI : MonoBehaviour
 
     private void OnMatchStarted(string matchId)
     {
-        statusMessage = $"Ván đấu đang bắt đầu! Match ID: {matchId}";
+        statusMessage = "Ván đấu đang bắt đầu!";
         if (lobbyPanel != null) lobbyPanel.SetActive(false);
     }
 
@@ -185,6 +185,7 @@ public class TableLobbyUI : MonoBehaviour
                 if (i < table.seats.Count)
                 {
                     var seat = table.seats[i];
+                    PlayerNames.Remember(seat.playerId, seat.displayName);
                     bool isMe = !string.IsNullOrEmpty(seat.playerId) && seat.playerId == myId;
                     bool isHost = !string.IsNullOrEmpty(seat.playerId) && seat.playerId == table.hostPlayerId;
 
@@ -203,8 +204,8 @@ public class TableLobbyUI : MonoBehaviour
                     }
                     else
                     {
-                        string idShort = seat.playerId.Length > 12 ? seat.playerId.Substring(0, 12) + "..." : seat.playerId;
-                        if (row.playerIdText != null) SetTxt(row.playerIdText, $"ID: {idShort}");
+                        string idShort = PlayerNames.Of(seat.playerId);
+                        if (row.playerIdText != null) SetTxt(row.playerIdText, idShort);
 
                         if (row.readyBadgeText != null)
                         {

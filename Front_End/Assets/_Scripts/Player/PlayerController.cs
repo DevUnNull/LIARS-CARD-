@@ -16,6 +16,7 @@ public class PlayerController : Singleton<PlayerController>
         firstPersonInteract = GetComponent<FirstPersonInteract>();
         firstPersonLook = GetComponent<FirstPersonLook>();
         firstPersonMovement = GetComponent<FirstPersonMovement>();
+        gameObject.AddComponent<NameTag>().Init(null, local: true);
     }
 
     private void LateUpdate()

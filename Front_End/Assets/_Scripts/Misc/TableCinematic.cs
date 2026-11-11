@@ -139,6 +139,7 @@ public class TableCinematic : MonoBehaviour
     private void ShowLocalBody(Transform body)
     {
         // Thân mình ở góc nhìn thứ nhất chỉ đổ bóng -> bật hiện để camera thấy; chỉ nhớ những cái đã đổi
+        NameTag.ShowLocal(true);
         shownBody = body.GetComponentsInChildren<SkinnedMeshRenderer>();
         for (int i = 0; i < shownBody.Length; i++)
         {
@@ -194,8 +195,11 @@ public class TableCinematic : MonoBehaviour
     {
         if (winnerAnim != null) winnerAnim.SetCelebrating(false);
         if (shownBody != null)
+        {
+            NameTag.ShowLocal(false);
             foreach (var r in shownBody)
                 if (r != null) r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
+        }
 
         if (brain != null) brain.enabled = false;
         if (cam != null)

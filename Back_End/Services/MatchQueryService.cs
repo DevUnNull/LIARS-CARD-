@@ -36,6 +36,7 @@ namespace Back_End.Services
                 Players = match.Players.Select(p => new PublicPlayerStateDto
                 {
                     PlayerId = p.PlayerId,
+                    DisplayName = p.DisplayName,
                     IsAlive = p.IsAlive,
                     RemainingCardCount = p.RemainingCardCount,
                     ShotCount = p.Revolver.CurrentChamber + 1,

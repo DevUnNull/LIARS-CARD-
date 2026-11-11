@@ -4,6 +4,7 @@
     {
         public int SeatIndex { get; set; }
         public string? PlayerId { get; set; }
+        public string? DisplayName { get; set; }
         public bool IsReady { get; set; }
     }
 }
