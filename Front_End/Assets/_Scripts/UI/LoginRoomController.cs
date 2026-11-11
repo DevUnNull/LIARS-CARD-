@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -37,10 +37,10 @@ public class LoginRoomController : MonoBehaviour
     [SerializeField] private string[] greetLines =
     {
         "Này, người lạ! Quán này không tiếp kẻ vô danh đâu.",
-        "Nói đi... cậu là ai? Cho tôi tên đăng nhập và mật khẩu.",
+        "Nói đi... cậu tên gì?",
     };
     [TextArea(1, 3)]
-    [SerializeField] private string welcomeLine = "Hà, ra là khách quen! Vào đi, bàn trống đang chờ cậu đấy.";
+    [SerializeField] private string welcomeLine = "Được rồi, vào đi! Bàn trống đang chờ cậu đấy.";
     [TextArea(1, 3)]
     [SerializeField] private string cancelLine = "Hừ, không muốn nói thì thôi. Cần thì quay lại.";
     [SerializeField] private float charsPerSecond = 45f;

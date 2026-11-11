@@ -330,6 +330,7 @@ GameObject:
   m_Component:
   - component: {fileID: 17420869}
   - component: {fileID: 17420870}
+  - component: {fileID: 17420871}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -364,11 +365,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8b7b94a2b90029d4ea12cce7bde36c42, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkManager
-  apiBaseUrl: http://localhost:5280
-  serverAddress: 127.0.0.1
-  serverPort: 9050
-  httpTimeoutSeconds: 15
-  connectTimeoutSeconds: 10
+--- !u!114 &17420871
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 17420868}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cee5772d8b95c974bb759565fde24f1d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PhotonLink
+  hubPrefab: {fileID: 6391336361741850994, guid: 175b513835460234e9eb769ba598b8a4, type: 3}
+  playerPrefab: {fileID: 1001590403035885464, guid: 05fe8e5e6df9f264797c6aa0d73885b0, type: 3}
+  sessionName: LiarsCard-Bar
+  maxPlayers: 20
+  connectTimeout: 20
 --- !u!1 &19943316
 GameObject:
   m_ObjectHideFlags: 0
@@ -1164,7 +1177,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u0110\u0102NG NH\u1EACP"
+  m_text: "V\xC0O QU\xC1N"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -2197,7 +2210,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &163067395
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4645,7 +4658,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a7eca256c9838f0428b5f1d5148c7ef2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LiarsCard.Network.MatchApiClient
-  baseUrl: http://localhost:5000
 --- !u!4 &348310578
 Transform:
   m_ObjectHideFlags: 0
@@ -9943,11 +9955,6 @@ MonoBehaviour:
   loginPassword: {fileID: 163067395}
   loginButton: {fileID: 516999965}
   loginStatus: {fileID: 173045554}
-  registerEmail: {fileID: 19943317}
-  displayName: {fileID: 651871971}
-  registerPassword: {fileID: 996893040}
-  registerButton: {fileID: 506232224}
-  registerStatus: {fileID: 331018820}
 --- !u!114 &839607260
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10092,10 +10099,9 @@ MonoBehaviour:
   greetLines:
   - "N\xE0y, ng\u01B0\u1EDDi l\u1EA1! Qu\xE1n n\xE0y kh\xF4ng ti\u1EBFp k\u1EBB v\xF4
     danh \u0111\xE2u."
-  - "N\xF3i \u0111i... c\u1EADu l\xE0 ai? Cho t\xF4i t\xEAn \u0111\u0103ng nh\u1EADp
-    v\xE0 m\u1EADt kh\u1EA9u."
-  welcomeLine: "H\xE0, ra l\xE0 kh\xE1ch quen! V\xE0o \u0111i, b\xE0n tr\u1ED1ng
-    \u0111ang ch\u1EDD c\u1EADu \u0111\u1EA5y."
+  - "N\xF3i \u0111i... c\u1EADu t\xEAn g\xEC?"
+  welcomeLine: "\u0110\u01B0\u1EE3c r\u1ED3i, v\xE0o \u0111i! B\xE0n tr\u1ED1ng \u0111ang
+    ch\u1EDD c\u1EADu \u0111\u1EA5y."
   cancelLine: "H\u1EEB, kh\xF4ng mu\u1ED1n n\xF3i th\xEC th\xF4i. C\u1EA7n th\xEC
     quay l\u1EA1i."
   charsPerSecond: 45
@@ -18244,7 +18250,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "Nh\u1EADp email..."
+  m_text: "T\xEAn c\u1EE7a b\u1EA1n"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -18928,7 +18934,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0cf1d6f92d9d7348a13b2823c05b0be, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AuthApiClient
-  baseUrl: http://localhost:5280
 --- !u!4 &1830674068
 Transform:
   m_ObjectHideFlags: 0
@@ -19777,7 +19782,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1940340704
 RectTransform:
   m_ObjectHideFlags: 0
