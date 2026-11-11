@@ -31,6 +31,7 @@ public class AuthApiClient : Singleton<AuthApiClient>
 
         DisplayName = displayName;
         if (string.IsNullOrEmpty(CurrentUserId)) CurrentUserId = Guid.NewGuid().ToString("N");
+        PlayerNames.Remember(CurrentUserId, DisplayName);   // tên mình hiện trong gương / cảnh người thắng
         return null;
     }
 }
