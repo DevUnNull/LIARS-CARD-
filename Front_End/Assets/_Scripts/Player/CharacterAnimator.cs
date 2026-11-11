@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// Chọn animation idle / walk / sit / die cho model nhân vật.
@@ -41,11 +41,10 @@ public class CharacterAnimator : MonoBehaviour
     private bool alive = true;
     private string current;
     private ChairItem[] chairs;
-    private Transform head, headEnd;
+    private Transform head, headEnd, armL, armR;
+    private Vector3 tipL, tipR;   // đầu bàn tay trong toạ độ xương tay
     private float headYaw, headPitch, targetYaw, targetPitch;
-    private Transform armL, armLEnd, armR, armREnd, handTarget;
-    private Vector3 handPos, handRight;
-    private float armWeight;
+    private int holdCards;   // 0 = không cầm, 1 = cầm trước ngực, 2 = giơ lên xem
 
     private void Reset() => animator = GetComponentInChildren<Animator>();
 
@@ -65,30 +64,63 @@ public class CharacterAnimator : MonoBehaviour
     {
         animator = newAnimator;
         model = animator.transform;
-        head = headEnd = armL = armLEnd = armR = armREnd = null;
+        head = headEnd = armL = armR = null;
         current = null;
         foreach (var t in model.GetComponentsInChildren<Transform>())
         {
             if (t.name == "head") head = t;
             else if (t.name == "head_end") headEnd = t;
             else if (t.name == "arm-left") armL = t;
-            else if (t.name == "arm-left_end") armLEnd = t;
             else if (t.name == "arm-right") armR = t;
-            else if (t.name == "arm-right_end") armREnd = t;
         }
+        if (armL != null) tipL = ArmTipLocal(model, armL);
+        if (armR != null) tipR = ArmTipLocal(model, armR);
     }
 
-    /// <summary>Cụm bài trên tay (RemoteHands gọi): khi ngồi, 2 tay vươn ra cầm bài theo target. Null = thả tay.</summary>
-    public void SetHandTarget(Transform target) => handTarget = target;
+    /// <summary>Bài trên tay (RemoteHands gọi): 0 = không cầm, 1 = cầm trước ngực (sitHold), 2 = giơ lên xem (sitPeek).</summary>
+    public void SetHoldCards(int mode) => holdCards = mode;
 
-    // Xoay xương tay để đầu tay chạm mép cụm bài (mỗi tay 1 bên)
-    private void AimArm(Transform arm, Transform end)
+    /// <summary>Điểm giữa 2 bàn tay khi đang chơi clip cầm bài (để cụm bài nằm đúng trong tay).</summary>
+    public bool TryGetHandsCenter(out Vector3 center)
     {
-        if (arm == null || end == null) return;
-        float side = Mathf.Sign(Vector3.Dot(arm.position - transform.position, transform.right));
-        Vector3 to = handPos + handRight * (side * 0.07f) - arm.position;
-        Quaternion aim = Quaternion.FromToRotation(end.position - arm.position, to) * arm.rotation;
-        arm.rotation = Quaternion.Slerp(arm.rotation, aim, armWeight);
+        bool ok = armL != null && armR != null && current != null && current.StartsWith("sit") && current != "sit";
+        center = ok ? (armL.TransformPoint(tipL) + armR.TransformPoint(tipR)) * 0.5f : default;
+        return ok;
+    }
+
+    /// <summary>
+    /// Đầu bàn tay (toạ độ local của xương tay) = đỉnh mesh xa vai nhất trong số đỉnh gắn vào xương này.
+    /// Cần vì xương arm→arm_end của model Kenney chĩa ngang, không trùng cánh tay nhìn thấy.
+    /// </summary>
+    public static Vector3 ArmTipLocal(Transform model, Transform arm)
+    {
+        foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>())
+        {
+            int bi = System.Array.IndexOf(smr.bones, arm);
+            if (bi < 0) continue;
+            var baked = new Mesh();
+            smr.BakeMesh(baked);   // đỉnh ra đúng kích thước thật (model scale 100): chỉ còn cộng vị trí + xoay
+            var verts = baked.vertices;
+            var weights = smr.sharedMesh.boneWeights;
+            var locals = new System.Collections.Generic.List<Vector3>();
+            float maxSq = 0f;
+            for (int i = 0; i < verts.Length; i++)
+            {
+                if (weights[i].boneIndex0 != bi || weights[i].weight0 < 0.5f) continue;
+                Vector3 local = arm.InverseTransformPoint(smr.transform.position + smr.transform.rotation * verts[i]);
+                locals.Add(local);
+                maxSq = Mathf.Max(maxSq, local.sqrMagnitude);
+            }
+            // Tâm cụm đỉnh ở đầu tay (xa vai >= 80%): lấy 1 đỉnh góc thì 2 tay lệch nhau
+            Vector3 sum = Vector3.zero;
+            int n = 0;
+            foreach (var l in locals)
+                if (l.sqrMagnitude >= 0.64f * maxSq) { sum += l; n++; }
+            Vector3 tip = n > 0 ? sum / n : Vector3.zero;
+            if (Application.isPlaying) Destroy(baked); else DestroyImmediate(baked);   // editor script cũng gọi hàm này
+            return tip;
+        }
+        return Vector3.zero;
     }
 
     private void Start() => chairs = FindObjectsByType<ChairItem>(FindObjectsSortMode.None);
@@ -112,12 +144,6 @@ public class CharacterAnimator : MonoBehaviour
         float k = 1f - Mathf.Exp(-headFollow * Time.deltaTime);
         headYaw = Mathf.Lerp(headYaw, targetYaw, k);
         headPitch = Mathf.Lerp(headPitch, targetPitch, k);
-
-        // Chỉ cầm bài khi đang ngồi thường (cầm súng / chết / ăn mừng để animation tự lo tay)
-        bool holding = handTarget != null && current == "sit";
-        if (holding) { handPos = handTarget.position; handRight = handTarget.right; }
-        armWeight = Mathf.MoveTowards(armWeight, holding ? 1f : 0f, 5f * Time.deltaTime);
-        if (armWeight > 0f) { AimArm(armL, armLEnd); AimArm(armR, armREnd); }
 
         if (head == null || !alive) return;
 
@@ -159,7 +185,7 @@ public class CharacterAnimator : MonoBehaviour
 
         var gun = LiarsCard.Cards3D.RevolverGun.Instance;
         bool holdingGun = alive && gun != null && gun.IsHeldBy(transform);
-        Play(!alive ? "die" : cheer ? "cheer" : holdingGun ? "gun" : chair != null ? "sit" : speed > walkSpeedThreshold ? "walk" : "idle");
+        Play(!alive ? "die" : cheer ? "cheer" : holdingGun ? "gun" : chair != null ? (holdCards == 2 ? "sitPeek" : holdCards == 1 ? "sitHold" : "sit") : speed > walkSpeedThreshold ? "walk" : "idle");
     }
 
     private ChairItem FindSeat(Vector3 p)
@@ -179,8 +205,8 @@ public class CharacterAnimator : MonoBehaviour
         if (state == current) return;
 
         // Cầm súng vẫn là đang ngồi; lần đầu (vừa xuất hiện) thì không kêu
-        bool wasSeated = current == "sit" || current == "gun";
-        bool seated = state == "sit" || state == "gun";
+        bool wasSeated = current != null && (current.StartsWith("sit") || current == "gun");
+        bool seated = state.StartsWith("sit") || state == "gun";
         if (current != null && seated != wasSeated && state != "die")
             GameAudio.PlayAt(seated ? "SitDown" : "StandUp", transform.position, 0.8f, 0f, 15f);
 

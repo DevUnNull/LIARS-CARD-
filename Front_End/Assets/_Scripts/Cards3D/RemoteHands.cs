@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using LiarsCard.Network;
 using TMPro;
@@ -180,7 +180,7 @@ namespace LiarsCard.Cards3D
         {
             foreach (var h in hands.Values)
             {
-                if (h.avatar != null && h.avatar.TryGetComponent<CharacterAnimator>(out var ha)) ha.SetHandTarget(null);
+                if (h.avatar != null && h.avatar.TryGetComponent<CharacterAnimator>(out var ha)) ha.SetHoldCards(0);
                 foreach (var c in h.cards) if (c != null) Destroy(c.gameObject);
                 if (h.anchor != null) Destroy(h.anchor.gameObject);
             }
@@ -249,10 +249,10 @@ namespace LiarsCard.Cards3D
                 if (!visible)
                 {
                     if (h.cards.Count > 0) RefreshCards(h, 0);
-                    if (h.avatar != null && h.avatar.TryGetComponent<CharacterAnimator>(out var idle)) idle.SetHandTarget(null);
+                    if (h.avatar != null && h.avatar.TryGetComponent<CharacterAnimator>(out var idle)) idle.SetHoldCards(0);
                     continue;
                 }
-                if (h.avatar.TryGetComponent<CharacterAnimator>(out var anim)) anim.SetHandTarget(h.anchor);
+                if (h.avatar.TryGetComponent<CharacterAnimator>(out var anim)) anim.SetHoldCards(h.peek ? 2 : 1);
 
                 // Đang có animation bay thì giữ nguyên các lá còn lại, chỉ đồng bộ số lá khi đứng yên
                 RefreshCards(h, h.count);
@@ -261,6 +261,8 @@ namespace LiarsCard.Cards3D
                 Quaternion yaw = Quaternion.Euler(0f, h.avatar.eulerAngles.y, 0f);
                 Vector3 off = h.peek ? PeekOffset : RestOffset;
                 Vector3 target = h.avatar.position + yaw * off;
+                // Có clip cầm bài thì đặt cụm bài giữa 2 bàn tay (nhích ra trước một chút cho khỏi lút tay)
+                if (anim != null && anim.TryGetHandsCenter(out var hands)) target = hands + yaw * new Vector3(0f, 0.02f, 0.05f);
                 h.anchor.position = Vector3.Lerp(h.anchor.position == Vector3.zero ? target : h.anchor.position, target, Time.deltaTime * 10f);
                 h.anchor.rotation = yaw;
 
