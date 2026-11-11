@@ -1,5 +1,5 @@
 [Unit]
-Description=Liars Card backend (API :5000, UDP :9050)
+Description=Liars Card backend (API :5000 sau Caddy HTTPS, UDP :9050)
 After=network-online.target
 Wants=network-online.target
 
@@ -8,7 +8,7 @@ User=liarscard
 WorkingDirectory=/opt/liarscard
 ExecStart=/opt/liarscard/Back_End
 EnvironmentFile=/etc/liarscard.env
-Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5000
 Restart=always
 RestartSec=5
 

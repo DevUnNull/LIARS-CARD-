@@ -180,6 +180,7 @@ namespace LiarsCard.Cards3D
         {
             foreach (var h in hands.Values)
             {
+                if (h.avatar != null && h.avatar.TryGetComponent<CharacterAnimator>(out var ha)) ha.SetHandTarget(null);
                 foreach (var c in h.cards) if (c != null) Destroy(c.gameObject);
                 if (h.anchor != null) Destroy(h.anchor.gameObject);
             }
@@ -248,8 +249,10 @@ namespace LiarsCard.Cards3D
                 if (!visible)
                 {
                     if (h.cards.Count > 0) RefreshCards(h, 0);
+                    if (h.avatar != null && h.avatar.TryGetComponent<CharacterAnimator>(out var idle)) idle.SetHandTarget(null);
                     continue;
                 }
+                if (h.avatar.TryGetComponent<CharacterAnimator>(out var anim)) anim.SetHandTarget(h.anchor);
 
                 // Đang có animation bay thì giữ nguyên các lá còn lại, chỉ đồng bộ số lá khi đứng yên
                 RefreshCards(h, h.count);

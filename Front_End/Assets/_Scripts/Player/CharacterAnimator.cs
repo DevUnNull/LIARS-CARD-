@@ -43,6 +43,9 @@ public class CharacterAnimator : MonoBehaviour
     private ChairItem[] chairs;
     private Transform head, headEnd;
     private float headYaw, headPitch, targetYaw, targetPitch;
+    private Transform armL, armLEnd, armR, armREnd, handTarget;
+    private Vector3 handPos, handRight;
+    private float armWeight;
 
     private void Reset() => animator = GetComponentInChildren<Animator>();
 
@@ -62,13 +65,30 @@ public class CharacterAnimator : MonoBehaviour
     {
         animator = newAnimator;
         model = animator.transform;
-        head = headEnd = null;
+        head = headEnd = armL = armLEnd = armR = armREnd = null;
         current = null;
         foreach (var t in model.GetComponentsInChildren<Transform>())
         {
             if (t.name == "head") head = t;
             else if (t.name == "head_end") headEnd = t;
+            else if (t.name == "arm-left") armL = t;
+            else if (t.name == "arm-left_end") armLEnd = t;
+            else if (t.name == "arm-right") armR = t;
+            else if (t.name == "arm-right_end") armREnd = t;
         }
+    }
+
+    /// <summary>Cụm bài trên tay (RemoteHands gọi): khi ngồi, 2 tay vươn ra cầm bài theo target. Null = thả tay.</summary>
+    public void SetHandTarget(Transform target) => handTarget = target;
+
+    // Xoay xương tay để đầu tay chạm mép cụm bài (mỗi tay 1 bên)
+    private void AimArm(Transform arm, Transform end)
+    {
+        if (arm == null || end == null) return;
+        float side = Mathf.Sign(Vector3.Dot(arm.position - transform.position, transform.right));
+        Vector3 to = handPos + handRight * (side * 0.07f) - arm.position;
+        Quaternion aim = Quaternion.FromToRotation(end.position - arm.position, to) * arm.rotation;
+        arm.rotation = Quaternion.Slerp(arm.rotation, aim, armWeight);
     }
 
     private void Start() => chairs = FindObjectsByType<ChairItem>(FindObjectsSortMode.None);
@@ -92,6 +112,13 @@ public class CharacterAnimator : MonoBehaviour
         float k = 1f - Mathf.Exp(-headFollow * Time.deltaTime);
         headYaw = Mathf.Lerp(headYaw, targetYaw, k);
         headPitch = Mathf.Lerp(headPitch, targetPitch, k);
+
+        // Chỉ cầm bài khi đang ngồi thường (cầm súng / chết / ăn mừng để animation tự lo tay)
+        bool holding = handTarget != null && current == "sit";
+        if (holding) { handPos = handTarget.position; handRight = handTarget.right; }
+        armWeight = Mathf.MoveTowards(armWeight, holding ? 1f : 0f, 5f * Time.deltaTime);
+        if (armWeight > 0f) { AimArm(armL, armLEnd); AimArm(armR, armREnd); }
+
         if (head == null || !alive) return;
 
         Transform body = transform;

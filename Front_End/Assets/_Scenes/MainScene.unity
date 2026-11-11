@@ -13393,7 +13393,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4732491262186270091, guid: 00baee54ff8ec1e4eaf62b6e273be3cc, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.554
+      value: 1.254
       objectReference: {fileID: 0}
     - target: {fileID: 4732491262186270091, guid: 00baee54ff8ec1e4eaf62b6e273be3cc, type: 3}
       propertyPath: m_LocalPosition.z
@@ -14313,6 +14313,10 @@ PrefabInstance:
     - target: {fileID: 5872017403280662227, guid: 437215bd317c8694a8f79bbc9fba7410, type: 3}
       propertyPath: tableID
       value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 6059104963822514591, guid: 437215bd317c8694a8f79bbc9fba7410, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8737880915370679774, guid: 437215bd317c8694a8f79bbc9fba7410, type: 3}
       propertyPath: m_Name
@@ -19309,6 +19313,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RemotePlayerManager
   remotePlayerPrefab: {fileID: 1380949765185175948, guid: 07884b81e51245140ab89b5e78b6e0e0, type: 3}
+  smoothing: 15
+  snapDistance: 3
 --- !u!1 &1898805893
 GameObject:
   m_ObjectHideFlags: 0
