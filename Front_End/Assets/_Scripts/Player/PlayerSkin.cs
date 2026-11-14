@@ -21,6 +21,7 @@ public class PlayerSkin : MonoBehaviour
 
     private void Start()
     {
+        StripStrayMeshes(transform);
         // Người chơi local: mặc skin đã lưu. Remote: chờ RemotePlayerManager gọi SetSkin.
         if (TryGetComponent<PlayerController>(out _)) SetSkin(SavedSkin);
     }
@@ -38,6 +39,7 @@ public class PlayerSkin : MonoBehaviour
         model.name = old.name;
         model.transform.SetLocalPositionAndRotation(old.localPosition, old.localRotation);
         model.transform.localScale = old.localScale;
+        StripStrayMeshes(model.transform);
         SetLayer(model.transform, old.gameObject.layer);
 
         // Giữ chế độ đổ bóng của model cũ (local = ShadowsOnly để camera góc nhìn thứ nhất không thấy thân mình)
@@ -63,6 +65,13 @@ public class PlayerSkin : MonoBehaviour
         PlayerPrefs.SetInt(PrefKey, Current);
         PlayerPrefs.Save();
         if (NetworkManager.Instance != null) NetworkManager.Instance.SendSkin((byte)Current);
+    }
+
+    // Character.fbx dính 2 mesh "Icosphere" (rộng 2m, thừa từ Blender) trông như tảng đá cạnh người
+    private static void StripStrayMeshes(Transform root)
+    {
+        foreach (var r in root.GetComponentsInChildren<MeshRenderer>(true))
+            if (r.name.StartsWith("Icosphere")) Destroy(r.gameObject);
     }
 
     private static void SetLayer(Transform t, int layer)

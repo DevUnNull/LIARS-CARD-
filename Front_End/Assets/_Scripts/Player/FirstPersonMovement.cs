@@ -43,7 +43,7 @@ public class FirstPersonMovement : MonoBehaviour
 
     private Vector2 HandleInput()
     {
-        return playerInput.PlayerInput.Move.ReadValue<Vector2>();
+        return Vector2.ClampMagnitude(playerInput.PlayerInput.Move.ReadValue<Vector2>() + MobileInput.Move, 1f);
     }
 
     private void MovePlayer(Vector2 moveVec)

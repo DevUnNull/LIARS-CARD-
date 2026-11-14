@@ -5,7 +5,7 @@ public class CursorManager : Singleton<CursorManager>
     public void HideCursor()
     {
         Cursor.visible = false;
-        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.lockState = Application.isMobilePlatform ? CursorLockMode.None : CursorLockMode.Locked; // khoá con trỏ làm Simulator đổi chuột->chạm bị kẹt giữa màn hình
     }
 
     public void EnableCursor()

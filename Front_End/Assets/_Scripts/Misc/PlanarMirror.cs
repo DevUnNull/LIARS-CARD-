@@ -19,14 +19,21 @@ public class PlanarMirror : MonoBehaviour
     [SerializeField, Range(256, 2048)] private int resolution = 768;
     [Tooltip("Chỉ render gương khi người chơi ở gần hơn khoảng này (mét) để tiết kiệm hiệu năng.")]
     [SerializeField, Min(1f)] private float activeDistance = 9f;
+    [Tooltip("Sau khi gương rời khỏi tầm nhìn vẫn render thêm bấy nhiêu giây (đơn vị: giây) để lia camera qua lại không bật/tắt liên tục. Khuyến nghị 0.2 - 0.5.")]
+    [SerializeField, Range(0f, 1f)] private float graceSeconds = 0.3f;
     [Tooltip("Độ tối nhẹ của kính (1 = phản chiếu nguyên màu).")]
     [SerializeField, Range(0.5f, 1f)] private float tint = 0.9f;
+
+    /// <summary>Tâm mặt kính trong thế giới (transform của object gương chỉ là pivot cả quầy Bar).</summary>
+    public Vector3 GlassCenter => glass.bounds.center;
 
     private Camera mirrorCam;
     private RenderTexture rt;
     private Vector3 llLocal, lrLocal, ulLocal;
     private Renderer[] ownRenderers;
     private readonly List<Renderer> shownBody = new();
+    private readonly Plane[] eyePlanes = new Plane[6];
+    private float hideAt;
 
     private void Awake()
     {
@@ -46,6 +53,9 @@ public class PlanarMirror : MonoBehaviour
         data.renderPostProcessing = false;
         data.requiresDepthTexture = false;
         data.requiresColorTexture = false;
+        data.renderShadows = false;          // ảnh trong gương nhỏ, bỏ bước shadow cho nhẹ
+        mirrorCam.allowMSAA = false;
+        mirrorCam.allowHDR = false;
 
         var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { name = "MirrorGlass" };
         mat.SetTexture("_BaseMap", rt);
@@ -108,7 +118,12 @@ public class PlanarMirror : MonoBehaviour
         Vector3 pe = eye.transform.position;
         float side = Vector3.Dot(pe - pa, n);
         Vector3 center = (pb + pc) * 0.5f;
-        bool visible = side > 0.05f && (pe - center).sqrMagnitude < activeDistance * activeDistance;
+        // Chỉ render gương khi mặt kính thật sự nằm trong tầm nhìn (đứng gần nhưng quay lưng thì bỏ qua cả một lần render cảnh)
+        GeometryUtility.CalculateFrustumPlanes(eye, eyePlanes);
+        bool seen = side > 0.05f && (pe - center).sqrMagnitude < activeDistance * activeDistance
+                    && GeometryUtility.TestPlanesAABB(eyePlanes, glass.bounds);
+        if (seen) hideAt = Time.time + graceSeconds;           // lia camera ngang qua gương không bật/tắt liên tục
+        bool visible = side > 0.05f && Time.time < hideAt;
         mirrorCam.enabled = visible;
         if (!visible) return;
 

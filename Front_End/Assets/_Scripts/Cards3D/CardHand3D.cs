@@ -293,9 +293,10 @@ namespace LiarsCard.Cards3D
 
         private void UpdateCursorLock()
         {
+            if (SettingsMenu.IsOpen) return;
             if (Cursor.lockState != CursorLockMode.Locked)
             {
-                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.lockState = Application.isMobilePlatform ? CursorLockMode.None : CursorLockMode.Locked; // khoá con trỏ làm Simulator đổi chuột->chạm bị kẹt giữa màn hình
                 Cursor.visible = false;
             }
         }
@@ -525,6 +526,7 @@ namespace LiarsCard.Cards3D
 
         public bool IsSpaceHeld()
         {
+            if (MobileInput.Peek) return true;
             var kb = Keyboard.current;
             if (kb != null) return kb.spaceKey.isPressed;
             try { return Input.GetKey(KeyCode.Space); } catch { return false; }

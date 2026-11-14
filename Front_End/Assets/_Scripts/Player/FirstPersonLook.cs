@@ -6,6 +6,8 @@ public class FirstPersonLook : MonoBehaviour
 {
     public float sensitivity = 2;
     public float smoothing = 1.5f;
+    [Tooltip("FPS chuẩn để tính độ mượt của chuột (làm mượt giữ nguyên cảm giác ở mọi FPS). Khuyến nghị: 120 - 200; thấp hơn thì chuột mượt/trễ hơn.")]
+    [SerializeField, Min(30f)] private float referenceFps = 200f;
 
     public Camera playerCamera;
     private Vector2 velocity;
@@ -62,7 +64,7 @@ public class FirstPersonLook : MonoBehaviour
     void Update()
     {
         // Khi chuột đang mở khóa (đang tương tác UI Canvas bàn chơi / lobby) -> không xoay camera theo chuột
-        if (Cursor.lockState == CursorLockMode.Locked)
+        if (Cursor.lockState == CursorLockMode.Locked || Application.isMobilePlatform)
             RotateCamera(HandleInput());
 
         // Model nhân vật (bóng / gương / người khác qua mạng) quay đầu theo
@@ -71,7 +73,7 @@ public class FirstPersonLook : MonoBehaviour
 
     private Vector2 HandleInput()
     {
-        return input.PlayerInput.Rotate.ReadValue<Vector2>();
+        return input.PlayerInput.Rotate.ReadValue<Vector2>() + MobileInput.Look;
     }
 
     private float defaultFov;
@@ -103,10 +105,9 @@ public class FirstPersonLook : MonoBehaviour
     {
         Vector2 rawFrameVelocity = mouseDelta * sensitivity;
 
-        frameVelocity = Vector2.Lerp(
-            frameVelocity,
-            rawFrameVelocity,
-            1f / Mathf.Max(1f, smoothing));
+        // Làm mượt theo thời gian thay vì theo frame: trước đây 75 FPS bị trễ gấp đôi so với 200 FPS nên chuột "nặng" hơn
+        float blend = 1f - Mathf.Pow(1f - 1f / Mathf.Max(1f, smoothing), Time.deltaTime * referenceFps);
+        frameVelocity = Vector2.Lerp(frameVelocity, rawFrameVelocity, blend);
 
         velocity += frameVelocity;
         if (bodyLocked)

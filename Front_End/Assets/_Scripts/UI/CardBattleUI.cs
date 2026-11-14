@@ -282,7 +282,9 @@ public class CardBattleUI : MonoBehaviour
         // Có súng 3D: chờ súng lên đạn xong rồi CLICK chuột trái 1 lần là bóp cò ("tạch")
         if (RevolverGun.Instance != null)
         {
-            if (mouse != null && mouse.leftButton.wasPressedThisFrame && RevolverGun.Instance.IsReadyToFire) ExecuteTriggerPull();
+            // Pointer = chuột hoặc màn hình cảm ứng (trên điện thoại Mouse.current là null)
+            var ptr = Pointer.current;
+            if (ptr != null && ptr.press.wasPressedThisFrame && RevolverGun.Instance.IsReadyToFire) ExecuteTriggerPull();
             return;
         }
 

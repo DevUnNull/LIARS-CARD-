@@ -31,6 +31,8 @@ public class MirrorItem : Item
         panel.SetActive(true);
         player.firstPersonMovement.enabled = false;
         CursorManager.Instance.EnableCursor();
+        SettingsMenu.ShowSide(true);
+        TableCinematic.PlayMirror(GetComponent<PlanarMirror>().GlassCenter);
         Refresh();
     }
 
@@ -48,6 +50,8 @@ public class MirrorItem : Item
         else skin.SetSkin(originalSkin);
 
         panel.SetActive(false);
+        SettingsMenu.ShowSide(false);
+        TableCinematic.Stop();
         PlayerController.Instance.firstPersonMovement.enabled = true;
         CursorManager.Instance.HideCursor();
     }

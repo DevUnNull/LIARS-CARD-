@@ -11,7 +11,7 @@ using UnityEngine.Rendering;
 /// </summary>
 public class TableCinematic : MonoBehaviour
 {
-    private enum Mode { Winner, Spectator }
+    private enum Mode { Winner, Spectator, Mirror }
 
     // Người thắng: camera cao hơn đầu và lùi ra trước mặt, chúc xuống
     private const float WinnerDistance = 2.1f;
@@ -67,6 +67,29 @@ public class TableCinematic : MonoBehaviour
         c.PlaceSpectatorCams();
         c.spectatorCams[1].enabled = false;   // mặc định góc trái
         c.StartCoroutine(c.EnableNextFrame(c.spectatorCams[0]));
+    }
+
+    /// <summary>Thử đồ: quay người chơi đối diện gương, camera lùi ra sau vai để thấy cả lưng lẫn hình phản chiếu.</summary>
+    public static void PlayMirror(Vector3 mirrorCenter)
+    {
+        var player = PlayerController.Instance;
+        if (player == null || Camera.main == null) return;
+        var c = Create(Mode.Mirror);
+        c.winner = player.transform;
+        player.firstPersonLook.FocusOnTable(mirrorCenter, 0f, c.camFov);
+        c.camLocalRot = c.cam.transform.localRotation;   // đã quay mặt vào gương, Restore trả đúng hướng này
+        c.ShowLocalBody(player.transform);
+
+        Vector3 fwd = player.transform.forward; fwd.y = 0f;
+        fwd.Normalize();
+        Vector3 eye = c.cam.transform.position;
+        Vector3 pos = eye + Vector3.up * 0.9f - fwd * 2.2f + Vector3.Cross(Vector3.up, fwd) * 0.9f;   // cao + lùi để vượt thùng/đồ vật quanh gương
+        Vector3 look = Vector3.Lerp(player.transform.position, mirrorCenter, 0.6f);
+        look.y = mirrorCenter.y - 0.5f;
+
+        var vcam = c.NewCam("MirrorCam", 55f);
+        vcam.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(look - pos, Vector3.up));
+        c.StartCoroutine(c.EnableNextFrame(vcam));
     }
 
     /// <summary>Đổi góc xem (0 trái, 1 phải). Cinemachine tự blend giữa 2 góc.</summary>
@@ -194,6 +217,8 @@ public class TableCinematic : MonoBehaviour
     private void Restore()
     {
         if (winnerAnim != null) winnerAnim.SetCelebrating(false);
+        // Đổi skin trong lúc quay đã thay model, mảng shownBody trỏ model cũ: quét lại model hiện tại
+        if (mode == Mode.Mirror && winner != null) shownBody = winner.GetComponentsInChildren<SkinnedMeshRenderer>();
         if (shownBody != null)
         {
             NameTag.ShowLocal(false);

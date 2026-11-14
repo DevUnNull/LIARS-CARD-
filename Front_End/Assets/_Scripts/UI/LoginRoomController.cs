@@ -155,14 +155,14 @@ public class LoginRoomController : MonoBehaviour
 
     private void UpdateHoverAndClick()
     {
-        var mouse = Mouse.current;
+        var mouse = Pointer.current; // chuột hoặc cảm ứng
         if (mouse == null || cam == null || bartenderCollider == null) return;
 
         Ray ray = cam.ScreenPointToRay(mouse.position.ReadValue());
         bool hit = bartenderCollider.Raycast(ray, out _, 50f);
         if (hit != hovering) { hovering = hit; ApplyHint(); }
 
-        if (hit && mouse.leftButton.wasPressedThisFrame)
+        if (hit && mouse.press.wasPressedThisFrame)
             StartTalk();
     }
 
@@ -270,8 +270,8 @@ public class LoginRoomController : MonoBehaviour
     private static bool SkipPressed()
     {
         var kb = Keyboard.current;
-        var mouse = Mouse.current;
-        return (kb != null && kb.anyKey.wasPressedThisFrame) || (mouse != null && mouse.leftButton.wasPressedThisFrame);
+        var mouse = Pointer.current;
+        return (kb != null && kb.anyKey.wasPressedThisFrame) || (mouse != null && mouse.press.wasPressedThisFrame);
     }
 
     private IEnumerator WaitClick()

@@ -16,13 +16,11 @@ public class FirstPersonInteract : MonoBehaviour
     {
         input.Enable();
         input.PlayerInput.Interact.performed += OnInteractWasPressed;
-        input.PlayerInput.Escape.performed += OnESCWasPressed;
     }
 
     private void OnDisable()
     {
         input.PlayerInput.Interact.performed -= OnInteractWasPressed;
-        input.PlayerInput.Escape.performed -= OnESCWasPressed;
         input.Disable();
     }
 
@@ -43,12 +41,12 @@ public class FirstPersonInteract : MonoBehaviour
         StartCoroutine(SendLeaveSeatRequest());
     }
 
-    private void OnESCWasPressed(InputAction.CallbackContext context)
+    // Rời ghế bằng Q (Esc bị trình duyệt chiếm: thoát fullscreen / nhả khoá chuột, và dành cho menu Cài đặt)
+    private void Update()
     {
-        if (isLeavingSeat)
-            return;
-
-        StartCoroutine(SendLeaveSeatRequest());
+        var kb = Keyboard.current;
+        if (kb != null && kb.qKey.wasPressedThisFrame && TableSessionManager.Instance != null && TableSessionManager.Instance.isSeated)
+            LeaveSeat();
     }
 
     private IEnumerator SendLeaveSeatRequest()

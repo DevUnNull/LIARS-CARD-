@@ -95,7 +95,7 @@ public class TableSessionManager : Singleton<TableSessionManager>
         }
 
         // Khoa lai con tro chuot khi dung day
-        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.lockState = Application.isMobilePlatform ? CursorLockMode.None : CursorLockMode.Locked; // khoá con trỏ làm Simulator đổi chuột->chạm bị kẹt giữa màn hình
         Cursor.visible = false;
 
         OnLeftTable?.Invoke();
