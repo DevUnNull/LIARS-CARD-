@@ -30,17 +30,48 @@ public class MobileControls : MonoBehaviour
     const float TapMaxMove = 25f;
     const float TapMaxTime = 0.4f;
 
+#if UNITY_EDITOR
+    const string MobileSimKey = "debug_force_mobile_controls";
+    public static bool ForceMobileInEditor
+    {
+        get => UnityEditor.EditorPrefs.GetBool(MobileSimKey, false);
+        set => UnityEditor.EditorPrefs.SetBool(MobileSimKey, value);
+    }
+
+    [UnityEditor.MenuItem("Tools/Liar's Card/Bật-Tắt Giả Lập Mobile Controls trong Editor")]
+    public static void ToggleMobileSimulation()
+    {
+        ForceMobileInEditor = !ForceMobileInEditor;
+        Debug.Log("<color=yellow>[MobileControls] Giả lập điều khiển Mobile trong Editor: " + (ForceMobileInEditor ? "BẬT (Khởi động controls khi Play)" : "TẮT") + "</color>");
+    }
+
+    [UnityEditor.MenuItem("Tools/Liar's Card/Bật-Tắt Giả Lập Mobile Controls trong Editor", true)]
+    public static bool ToggleMobileSimulationValidate()
+    {
+        UnityEditor.Menu.SetChecked("Tools/Liar's Card/Bật-Tắt Giả Lập Mobile Controls trong Editor", ForceMobileInEditor);
+        return true;
+    }
+#endif
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
     {
-        if (!Application.isMobilePlatform) return;
+        bool isMobile = Application.isMobilePlatform;
+#if UNITY_EDITOR
+        if (ForceMobileInEditor) isMobile = true;
+#endif
+        if (!isMobile) return;
+
+#if UNITY_EDITOR
+        TouchSimulation.Enable(); // Giả lập chuột thành cảm ứng ngón tay trong Editor
+#endif
         Screen.autorotateToPortrait = Screen.autorotateToPortraitUpsideDown = false;
         Screen.autorotateToLandscapeLeft = Screen.autorotateToLandscapeRight = true;
         Screen.orientation = ScreenOrientation.AutoRotation;
         DontDestroyOnLoad(new GameObject("MobileControls", typeof(MobileControls)));
     }
 
-    RectTransform stickBase, stickKnob, playBtn, accuseBtn, trustBtn, peekBtn, interactBtn, leaveBtn;
+    RectTransform stickBase, stickKnob, playBtn, accuseBtn, trustBtn, peekBtn, interactBtn, leaveBtn, boomBtn;
     bool spritesReady;
     int stickFinger = -1, lookFinger = -1, peekFinger = -1;
     Vector2 stickOrigin, lookStart;
@@ -49,6 +80,9 @@ public class MobileControls : MonoBehaviour
     void Awake()
     {
         EnhancedTouchSupport.Enable();
+#if UNITY_EDITOR
+        TouchSimulation.Enable();
+#endif
 
         var canvas = gameObject.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -132,6 +166,9 @@ public class MobileControls : MonoBehaviour
         interactBtn = MakeButton("Interact", S("Tutorial/Throw Card/Image"), new Vector2(330, 530));
         leaveBtn = MakeLeaveButton();
         trustBtn = MakeButton("Trust", S("Tutorial/Truth/Image"), new Vector2(60, 530));
+        var boomSprite = S("Tutorial/Boom/Image");
+        if (boomSprite == null) boomSprite = S("Tutorial/Truth/Image");
+        boomBtn = MakeButton("Boom", boomSprite, new Vector2(195, 395));
         spritesReady = true;
     }
 
@@ -146,16 +183,28 @@ public class MobileControls : MonoBehaviour
         var tut = ui.battleHUD.transform.Find("Tutorial");
         if (tut != null && tut.gameObject.activeSelf) tut.gameObject.SetActive(false);
 
-        bool turn = ui.IsInBattle && ui.IsMyTurn;
+#if UNITY_EDITOR
+        if (ForceMobileInEditor && Cursor.lockState == CursorLockMode.Locked)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+#endif
+
+        bool inPenalty = ui.IsInBattle && ui.awaitingTriggerPull;
+        bool turn = ui.IsInBattle && ui.IsMyTurn && !inPenalty;
         var seat = TableSessionManager.Instance;
-        leaveBtn.gameObject.SetActive(seat != null && seat.isSeated);
+        leaveBtn.gameObject.SetActive(seat != null && seat.isSeated && !inPenalty);
         // Nút E: đang ngắm vật tương tác được (ghế, gương, jukebox...) và đang đi lại được
-        interactBtn.gameObject.SetActive(CanWalk() && RaycastSource.Instance != null && RaycastSource.Instance.currentObject != null);
-        peekBtn.gameObject.SetActive(ui.IsInBattle && !turn);
+        interactBtn.gameObject.SetActive(CanWalk() && RaycastSource.Instance != null && RaycastSource.Instance.currentObject != null && !inPenalty);
+        peekBtn.gameObject.SetActive(ui.IsInBattle && !turn && !inPenalty);
         if (!peekBtn.gameObject.activeSelf) { MobileInput.Peek = false; peekFinger = -1; }
         playBtn.gameObject.SetActive(turn && ui.SelectedCardCount > 0);
-        accuseBtn.gameObject.SetActive(turn && ui.lastPlay != null && !string.IsNullOrEmpty(ui.lastPlay.playId));
-        trustBtn.gameObject.SetActive(turn && ui.truthObject != null && ui.truthObject.activeSelf);
+        // Lúc bị xử bắn: KHÔNG hiện nút X (accuseBtn) nữa, chỉ hiện nút Boom (phím C)
+        accuseBtn.gameObject.SetActive(turn && ui.lastPlay != null && !string.IsNullOrEmpty(ui.lastPlay.playId) && !inPenalty);
+        trustBtn.gameObject.SetActive(turn && ui.truthObject != null && ui.truthObject.activeSelf && !inPenalty);
+        bool showBoom = inPenalty && ui.isPenalizedPlayer && !ui.triggerPulled;
+        if (boomBtn != null && boomBtn.gameObject.activeSelf != showBoom) boomBtn.gameObject.SetActive(showBoom);
 
         foreach (var t in Touch.activeTouches)
         {
@@ -218,6 +267,7 @@ public class MobileControls : MonoBehaviour
         if (Hit(playBtn, p)) { ui.ActionPlayCards(); return true; }
         if (Hit(accuseBtn, p)) { ui.ActionChallenge(); return true; }
         if (Hit(trustBtn, p)) { ui.ActionTrust(); return true; }
+        if (boomBtn != null && Hit(boomBtn, p)) { ui.ExecuteTriggerPull(); return true; }
         return false;
     }
 

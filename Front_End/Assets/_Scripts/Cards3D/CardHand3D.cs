@@ -293,7 +293,7 @@ namespace LiarsCard.Cards3D
 
         private void UpdateCursorLock()
         {
-            if (SettingsMenu.IsOpen) return;
+            if (SettingsMenu.IsOpen || CardBattleUI.GameOverShown) return;
             if (Cursor.lockState != CursorLockMode.Locked)
             {
                 Cursor.lockState = Application.isMobilePlatform ? CursorLockMode.None : CursorLockMode.Locked; // khoá con trỏ làm Simulator đổi chuột->chạm bị kẹt giữa màn hình

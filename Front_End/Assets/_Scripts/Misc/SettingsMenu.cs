@@ -41,9 +41,23 @@ public class SettingsMenu : MonoBehaviour
         if (PlayerPrefs.HasKey(QualKey)) QualitySettings.SetQualityLevel(PlayerPrefs.GetInt(QualKey));
 
         ui.volumeSlider.SetValueWithoutNotify(AudioListener.volume);
-        ui.volumeSlider.onValueChanged.AddListener(x => { AudioListener.volume = x; PlayerPrefs.SetFloat(VolKey, x); });
+        UpdateVolumeLabel(AudioListener.volume);
+        ui.volumeSlider.onValueChanged.AddListener(x =>
+        {
+            AudioListener.volume = x;
+            PlayerPrefs.SetFloat(VolKey, x);
+            UpdateVolumeLabel(x);
+        });
+
         ui.sensitivitySlider.SetValueWithoutNotify(sens);
-        ui.sensitivitySlider.onValueChanged.AddListener(x => { sens = x; PlayerPrefs.SetFloat(SensKey, x); });
+        UpdateSensitivityLabel(sens);
+        ui.sensitivitySlider.onValueChanged.AddListener(x =>
+        {
+            sens = x;
+            PlayerPrefs.SetFloat(SensKey, x);
+            UpdateSensitivityLabel(x);
+        });
+
         ui.graphicsButton.onClick.AddListener(() =>
         {
             int next = (QualitySettings.GetQualityLevel() + 1) % QualitySettings.names.Length;
@@ -52,6 +66,7 @@ public class SettingsMenu : MonoBehaviour
             ApplyFps(); // đổi mức đồ họa sẽ ghi đè VSync theo mức đó, đặt lại theo lựa chọn của người chơi
             RefreshGraphicsText();
         });
+
         fpsIndex = Mathf.Clamp(PlayerPrefs.GetInt(FpsKey, 0), 0, FpsOptions.Length - 1);
         ui.fpsButton.onClick.AddListener(() =>
         {
@@ -59,10 +74,31 @@ public class SettingsMenu : MonoBehaviour
             PlayerPrefs.SetInt(FpsKey, fpsIndex);
             ApplyFps();
         });
+
         ApplyFps();
         ui.closeButton.onClick.AddListener(Toggle);
+
+        if (ui.backdrop != null)
+        {
+            var backBtn = ui.backdrop.GetComponent<Button>();
+            if (backBtn != null) backBtn.onClick.AddListener(Toggle);
+        }
+
         RefreshGraphicsText();
         ui.panel.gameObject.SetActive(false);
+        if (ui.backdrop != null) ui.backdrop.gameObject.SetActive(false);
+    }
+
+    void UpdateVolumeLabel(float val)
+    {
+        if (ui.volumeValueText != null)
+            ui.volumeValueText.text = $"{Mathf.RoundToInt(val * 100f)}%";
+    }
+
+    void UpdateSensitivityLabel(float val)
+    {
+        if (ui.sensitivityValueText != null)
+            ui.sensitivityValueText.text = $"{val:0.0}x";
     }
 
     // Màn 75Hz mà game chạy 200 FPS không VSync thì xé hình, khung không đều nên camera khựng: mặc định VSync
@@ -70,14 +106,34 @@ public class SettingsMenu : MonoBehaviour
     {
         int cap = FpsOptions[fpsIndex];
         int hz = Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value);
+        if (hz <= 0) hz = 60;
         QualitySettings.vSyncCount = cap == -1 ? 1 : 0;
         // VSync còn đặt thêm trần = Hz màn hình: trong Editor (Game view tắt VSync) hoặc nơi VSync không có tác dụng thì vẫn bị khóa đúng nhịp màn hình
         Application.targetFrameRate = cap > 0 ? cap : cap == -1 ? Mathf.Max(hz, 30) : (Application.isMobilePlatform ? 120 : -1);
-        ui.fpsText.text = "Khóa FPS: " + (cap == -1 ? $"VSync ({hz} Hz)" : cap == 0 ? "Không giới hạn" : cap.ToString()) + "  (bấm để đổi)";
+
+        if (ui.fpsText != null)
+        {
+            string capStr = cap == -1 ? $"VSync ({hz} Hz)" : cap == 0 ? "Không giới hạn" : $"{cap} FPS";
+            ui.fpsText.text = $"KHÓA FPS: <color=#F1C40F><b>{capStr}</b></color>";
+        }
     }
 
-    void RefreshGraphicsText() =>
-        ui.graphicsText.text = "Đồ họa: " + QualitySettings.names[QualitySettings.GetQualityLevel()] + "  (bấm để đổi)";
+    void RefreshGraphicsText()
+    {
+        if (ui.graphicsText == null) return;
+        int level = QualitySettings.GetQualityLevel();
+        string qName = (level >= 0 && level < QualitySettings.names.Length) ? QualitySettings.names[level] : "PC";
+        bool isPC = qName.IndexOf("PC", System.StringComparison.OrdinalIgnoreCase) >= 0;
+
+        if (isPC)
+        {
+            ui.graphicsText.text = "ĐỒ HỌA: <color=#F1C40F><b>PC</b></color> <size=75%>(Chi tiết cao)</size>";
+        }
+        else
+        {
+            ui.graphicsText.text = "ĐỒ HỌA: <color=#2ECC71><b>MOBILE</b></color> <size=75%>(Tối ưu mượt)</size>";
+        }
+    }
 
     void Update()
     {
@@ -103,6 +159,7 @@ public class SettingsMenu : MonoBehaviour
         var rt = m.ui.panel;
         rt.anchorMin = rt.anchorMax = rt.pivot = on ? new Vector2(1, 0.5f) : new Vector2(0.5f, 0.5f);
         rt.anchoredPosition = on ? m.ui.sideOffset : Vector2.zero;
+        if (m.ui.backdrop != null) m.ui.backdrop.gameObject.SetActive(false); // Khi soi gương không che đen màn hình
         m.ui.closeButton.gameObject.SetActive(!on);
         rt.gameObject.SetActive(on);
         IsOpen = on;
@@ -113,6 +170,7 @@ public class SettingsMenu : MonoBehaviour
         if (side) return;
         bool open = !ui.panel.gameObject.activeSelf;
         ui.panel.gameObject.SetActive(open);
+        if (ui.backdrop != null) ui.backdrop.gameObject.SetActive(open);
         IsOpen = open;
         if (open)
         {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -53,6 +53,9 @@ public class CardBattleUI : MonoBehaviour
     public GameObject battleHUD;
     [Tooltip("Object BattleHUD/Tutorial/Truth: chỉ hiện khi đến lượt mình và đối thủ vừa đánh hết bài (được Tố hoặc Tin). Để trống thì tự tìm theo đường dẫn.")]
     public GameObject truthObject;
+    [Tooltip("Object BattleHUD/Tutorial/Boom: nút bóp cò súng Nga. Chỉ hiện khi người chơi bị phạt và phải tự bắn.")]
+    public GameObject boomObject;
+    public Button boomButton;
     private bool lastPlayOwnerOutOfCards;
     public TMP_Text roundText;
     public TMP_Text tableRankText;
@@ -81,6 +84,8 @@ public class CardBattleUI : MonoBehaviour
 
     [Header("uGUI Game Over Modal")]
     public GameObject gameOverModal;
+    /// <summary>True khi bảng kết thúc đang hiện; CardHand3D không khoá chuột lại trong lúc này.</summary>
+    public static bool GameOverShown { get; private set; }
     public TMP_Text goTitleText;
     public TMP_Text goWinnerText;
     public Button goReturnButton;
@@ -268,36 +273,31 @@ public class CardBattleUI : MonoBehaviour
             return;
         }
 
-        bool isLeftMouseDown = false;
-        var mouse = Mouse.current;
-        if (mouse != null)
-        {
-            isLeftMouseDown = mouse.leftButton.isPressed;
-        }
-        else
-        {
-            try { isLeftMouseDown = Input.GetMouseButton(0); } catch { }
-        }
+        // Bấm phím C hoặc click chuột trái / chạm màn hình đều nhận lệnh bóp cò
+        bool isKeyCPressed = false;
+        var kb = Keyboard.current;
+        if (kb != null) isKeyCPressed = kb.cKey.wasPressedThisFrame;
+        else { try { isKeyCPressed = Input.GetKeyDown(KeyCode.C); } catch { } }
 
-        // Có súng 3D: chờ súng lên đạn xong rồi CLICK chuột trái 1 lần là bóp cò ("tạch")
+        var ptr = Pointer.current;
+        bool isPointerClicked = ptr != null && ptr.press.wasPressedThisFrame;
+
+        // Có súng 3D: chờ súng lên đạn xong, bấm C hoặc click chuột trái là bóp cò ("tạch" / "đoàng")
         if (RevolverGun.Instance != null)
         {
-            // Pointer = chuột hoặc màn hình cảm ứng (trên điện thoại Mouse.current là null)
-            var ptr = Pointer.current;
-            if (ptr != null && ptr.press.wasPressedThisFrame && RevolverGun.Instance.IsReadyToFire) ExecuteTriggerPull();
-            return;
-        }
-
-        // Không có súng 3D (fallback): bóp cò bằng cách GIỮ chuột trái (hoặc click nút GUI)
-        if (isLeftMouseDown)
-        {
-            triggerHoldProgress += Time.deltaTime / TRIGGER_HOLD_TIME;
-            if (triggerHoldProgress >= 1f)
+            if ((isKeyCPressed || isPointerClicked) && RevolverGun.Instance.IsReadyToFire)
             {
                 ExecuteTriggerPull();
             }
+            return;
         }
-        else
+
+        // Không có súng 3D (fallback): bấm C hoặc click chuột trái để bóp cò
+        if (isKeyCPressed || isPointerClicked)
+        {
+            ExecuteTriggerPull();
+            return;
+        }
         {
             triggerHoldProgress = Mathf.Max(0f, triggerHoldProgress - Time.deltaTime * 2.5f);
         }
@@ -893,6 +893,7 @@ public class CardBattleUI : MonoBehaviour
 
                 if (battleHUD != null && battleHUD.activeSelf) battleHUD.SetActive(false);
                 if (gameOverModal != null && gameOverModal.activeSelf) gameOverModal.SetActive(false);
+                GameOverShown = false;
                 return;
             }
         }
@@ -910,6 +911,8 @@ public class CardBattleUI : MonoBehaviour
             // Cho mọi người xem cảnh người thắng ăn mừng một lúc rồi mới hiện bảng kết quả
             bool showModal = hasWinner && (Time.time - winnerSince >= WinnerModalDelay || !TableCinematic.IsWinnerPlaying);
             if (gameOverModal.activeSelf != showModal) gameOverModal.SetActive(showModal);
+            GameOverShown = showModal;
+            if (showModal && Cursor.lockState != CursorLockMode.None) { Cursor.lockState = CursorLockMode.None; Cursor.visible = true; } // trả chuột để bấm nút
 
             if (hasWinner)
             {
@@ -936,11 +939,70 @@ public class CardBattleUI : MonoBehaviour
         {
             if (battleHUD.activeSelf != inBattle) battleHUD.SetActive(inBattle);
 
-            if (truthObject == null) { var t = battleHUD.transform.Find("Tutorial/Truth"); if (t != null) truthObject = t.gameObject; }
-            if (truthObject != null)
+            // Quản lý các phím trong bảng Tutorial (BattleHUD/Tutorial)
+            Transform tut = battleHUD.transform.Find("Tutorial");
+            if (tut != null)
             {
-                bool showTruth = inBattle && IsMyTurn && lastPlayOwnerOutOfCards && !awaitingTriggerPull && !showPenaltyModal && string.IsNullOrEmpty(winnerPlayerId);
-                if (truthObject.activeSelf != showTruth) truthObject.SetActive(showTruth);
+                bool inPenalty = inBattle && awaitingTriggerPull;
+                bool showBoom = inPenalty && isPenalizedPlayer && !triggerPulled;
+
+                // Các nút đánh bài thông thường: ẩn hoàn toàn khi đang bị xử bắn (bao gồm nút X - Liar)
+                Transform switchCard = tut.Find("Switch Card");
+                if (switchCard != null && switchCard.gameObject.activeSelf == inPenalty)
+                    switchCard.gameObject.SetActive(!inPenalty);
+
+                Transform selectCard = tut.Find("Select Card");
+                if (selectCard != null && selectCard.gameObject.activeSelf == inPenalty)
+                    selectCard.gameObject.SetActive(!inPenalty);
+
+                Transform throwCard = tut.Find("Throw Card");
+                if (throwCard != null && throwCard.gameObject.activeSelf == inPenalty)
+                    throwCard.gameObject.SetActive(!inPenalty);
+
+                Transform liar = tut.Find("Liar");
+                if (liar != null && liar.gameObject.activeSelf == inPenalty)
+                    liar.gameObject.SetActive(!inPenalty);
+
+                if (truthObject == null) { var t = tut.Find("Truth"); if (t != null) truthObject = t.gameObject; }
+                if (truthObject != null)
+                {
+                    bool showTruth = !inPenalty && inBattle && IsMyTurn && lastPlayOwnerOutOfCards && !showPenaltyModal && string.IsNullOrEmpty(winnerPlayerId);
+                    if (truthObject.activeSelf != showTruth) truthObject.SetActive(showTruth);
+                }
+
+                // Nút Boom (phím C): CHỈ hiển thị khi người chơi bị phạt và phải tự bóp cò súng Nga
+                if (boomObject == null)
+                {
+                    var b = tut.Find("Boom");
+                    if (b != null)
+                    {
+                        boomObject = b.gameObject;
+                        boomButton = b.GetComponent<Button>();
+                        if (boomButton != null)
+                        {
+                            boomButton.onClick.RemoveAllListeners();
+                            boomButton.onClick.AddListener(ExecuteTriggerPull);
+                        }
+                    }
+                }
+                if (boomObject != null)
+                {
+                    if (boomObject.activeSelf != showBoom) boomObject.SetActive(showBoom);
+                    if (showBoom)
+                    {
+                        // Trả con trỏ chuột khi nút Boom xuất hiện để người chơi có thể click chuột vào nút
+                        if (Cursor.lockState != CursorLockMode.None)
+                        {
+                            Cursor.lockState = CursorLockMode.None;
+                            Cursor.visible = true;
+                        }
+                        if (boomButton != null)
+                        {
+                            bool ready = (RevolverGun.Instance == null) ? (triggerArmCooldown <= 0f) : RevolverGun.Instance.IsReadyToFire;
+                            boomButton.interactable = ready;
+                        }
+                    }
+                }
             }
 
             if (inBattle)
@@ -1031,7 +1093,7 @@ public class CardBattleUI : MonoBehaviour
                         // Thay panel bằng thông báo: người bị phạt thấy hướng dẫn, người khác thấy đang chờ
                         string victim = !string.IsNullOrEmpty(penalizedPlayerId) ? penalizedPlayerId : "Đối thủ";
                         string penaltyHint = !awaitingTriggerPull ? penaltyDetail
-                            : isPenalizedPlayer ? "<color=red><b>BẠN BỊ PHẠT!</b></color> Chờ lên đạn rồi CLICK CHUỘT TRÁI để bóp cò"
+                            : isPenalizedPlayer ? "<color=red><b>BẠN BỊ PHẠT!</b></color> Hãy nhấn phím <b>[C]</b> hoặc bấm nút để bóp cò!"
                             : $"<color=yellow>[{victim}] đang dí súng vào đầu...</color>";
                         SetTxt(hudHintText, penaltyHint + myShotInfo);
                     }
